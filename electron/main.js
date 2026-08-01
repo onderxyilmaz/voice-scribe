@@ -320,6 +320,7 @@ ipcMain.on('quit-and-install', () => {
   }
 });
 
+ipcMain.handle('get-app-version', () => app.getVersion());
 ipcMain.handle('get-config', () => store.config);
 ipcMain.handle('save-config', (event, config) => {
   const updated = store.saveConfig(config);
