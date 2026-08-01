@@ -1,6 +1,6 @@
 {
   "name": "voicescribe",
-  "version": "1.0.4",
+  "version": "1.0.8",
   "description": "VoiceScribe — Windows 11 için Akıllı ve Fluent Tasarımlı Sesli Dikte (Voice-to-Text) Uygulaması",
   "main": "electron/main.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "vite build",
     "electron:dev": "concurrently -k \"vite\" \"electron .\"",
     "start": "electron .",
-    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& vite build && electron-builder --win --dir && node python/stamp_icon.js && electron-builder --win nsis portable --prepackaged release/win-unpacked"
+    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& vite build && electron-builder --win --dir && node python/stamp_icon.js && node python/write_app_update_yml.js && electron-builder --win nsis portable --prepackaged release-1.0.8/win-unpacked"
   },
   "build": {
     "appId": "com.voicescribe.app",
@@ -19,7 +19,7 @@
       "repo": "voice-scribe"
     },
     "directories": {
-      "output": "release"
+      "output": "release-1.0.8"
     },
     "files": [
       "dist/**/*",
@@ -40,10 +40,14 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "VoiceScribe",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
       "installerIcon": "electron/icon.ico",
       "uninstallerIcon": "electron/icon.ico",
       "installerHeaderIcon": "electron/icon.ico",
       "installerHeader": "electron/icon.png"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}.${ext}"
     }
   },
   "keywords": [

@@ -7,7 +7,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Auto-Update States
-  const [currentVersion, setCurrentVersion] = useState('1.0.2');
+  const [currentVersion, setCurrentVersion] = useState('—');
   const [updateStatus, setUpdateStatus] = useState({ status: 'idle', version: '' });
 
   useEffect(() => {
@@ -206,12 +206,13 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
               </button>
             )}
 
-            {(updateStatus.status === 'idle' || updateStatus.status === 'latest') && (
+            {(updateStatus.status === 'idle' || updateStatus.status === 'latest' || updateStatus.status === 'error') && (
               <button
                 onClick={handleCheckForUpdates}
                 className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-white/10"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Güncellemeleri Denetle
+                <RefreshCw className="w-3.5 h-3.5" />
+                {updateStatus.status === 'error' ? 'Tekrar Dene' : 'Güncellemeleri Denetle'}
               </button>
             )}
 

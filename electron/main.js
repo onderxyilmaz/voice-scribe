@@ -20,7 +20,35 @@ let isRecording = false;
 // Configure Auto-Updater
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
+
+function ensureUpdateConfig() {
+  // Packaged builds expect resources/app-update.yml. Older --prepackaged
+  // builds omitted it; provide a runtime fallback so update checks still work.
+  const bundled = path.join(process.resourcesPath || '', 'app-update.yml');
+  if (fs.existsSync(bundled)) return;
+
+  try {
+    const fallbackDir = app.getPath('userData');
+    const fallback = path.join(fallbackDir, 'app-update.yml');
+    const contents = [
+      'provider: github',
+      'owner: onderxyilmaz',
+      'repo: voice-scribe',
+      'updaterCacheDirName: voicescribe-updater',
+      ''
+    ].join('\n');
+    fs.writeFileSync(fallback, contents, 'utf8');
+    autoUpdater.updateConfigPath = fallback;
+    console.log('📝 [AUTO-UPDATER] Fallback app-update.yml:', fallback);
+  } catch (e) {
+    console.error('❌ [AUTO-UPDATER] Could not create fallback app-update.yml:', e.message);
+  }
+}
+
 try {
+  if (app.isPackaged) {
+    ensureUpdateConfig();
+  }
   autoUpdater.setFeedURL({
     provider: 'github',
     owner: 'onderxyilmaz',
@@ -30,10 +58,54 @@ try {
   console.log('autoUpdater setFeedURL note:', e.message);
 }
 
+function isPortableBuild() {
+  // electron-builder portable sets this env var at runtime
+  return Boolean(process.env.PORTABLE_EXECUTABLE_DIR);
+}
+
 function sendUpdateStatus(data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-status', data);
   }
+}
+
+function runUpdateCheck() {
+  if (!app.isPackaged) {
+    sendUpdateStatus({
+      status: 'error',
+      error: 'Geliştirme modunda güncelleme kontrolü yapılamaz. Paketlenmiş NSIS kurulumunu kullanın.'
+    });
+    return;
+  }
+
+  if (isPortableBuild()) {
+    sendUpdateStatus({
+      status: 'error',
+      error: 'Portable sürümde otomatik güncelleme desteklenmiyor. Setup (NSIS) kurulumunu kullanın.'
+    });
+    return;
+  }
+
+  sendUpdateStatus({ status: 'checking' });
+  autoUpdater.checkForUpdates().catch((err) => {
+    // Do not report "latest" on failure — that masked real errors before.
+    // The 'error' event usually fires too; keep a fallback status here.
+    console.error('❌ [UPDATE CHECK FAILED]:', err ? err.message : err);
+    sendUpdateStatus({
+      status: 'error',
+      error: err ? err.message : 'Güncelleme kontrolü başarısız'
+    });
+  });
+}
+
+function scheduleStartupUpdateCheck() {
+  if (!app.isPackaged || isPortableBuild()) return;
+
+  // Wait until UI can receive status events
+  setTimeout(() => {
+    console.log('🔄 [AUTO-UPDATER] Başlangıç güncelleme kontrolü...');
+    runUpdateCheck();
+  }, 8000);
 }
 
 autoUpdater.on('checking-for-update', () => {
@@ -48,7 +120,7 @@ autoUpdater.on('update-available', (info) => {
   });
 });
 
-autoUpdater.on('update-not-available', (info) => {
+autoUpdater.on('update-not-available', () => {
   sendUpdateStatus({ status: 'latest', version: app.getVersion() });
 });
 
@@ -263,6 +335,7 @@ app.whenReady().then(() => {
   registerGlobalHotkeys();
 
   createDashboardWindow();
+  scheduleStartupUpdateCheck();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createDashboardWindow();
@@ -299,32 +372,35 @@ ipcMain.on('quit-app', () => {
 });
 
 ipcMain.on('check-for-updates', () => {
-  if (app.isPackaged) {
-    autoUpdater.checkForUpdates().catch(() => {
-      sendUpdateStatus({ status: 'latest', version: app.getVersion() });
-    });
-  } else {
-    // In development mode, simulate update check
-    sendUpdateStatus({ status: 'checking' });
-    setTimeout(() => {
-      sendUpdateStatus({ status: 'latest', version: app.getVersion() });
-    }, 1200);
-  }
+  runUpdateCheck();
 });
 
 ipcMain.on('download-update', () => {
-  if (app.isPackaged) {
-    console.log('📥 [AUTO-UPDATER] Güncelleme indirmesi başlatıldı...');
-    autoUpdater.downloadUpdate().catch((err) => {
-      console.error('❌ [DOWNLOAD ERROR]:', err);
-      sendUpdateStatus({ status: 'error', error: err ? err.message : 'İndirme hatası' });
+  if (!app.isPackaged) {
+    sendUpdateStatus({
+      status: 'error',
+      error: 'Geliştirme modunda güncelleme indirilemez.'
     });
+    return;
   }
+  if (isPortableBuild()) {
+    sendUpdateStatus({
+      status: 'error',
+      error: 'Portable sürümde otomatik güncelleme desteklenmiyor. Setup (NSIS) kurulumunu kullanın.'
+    });
+    return;
+  }
+
+  console.log('📥 [AUTO-UPDATER] Güncelleme indirmesi başlatıldı...');
+  autoUpdater.downloadUpdate().catch((err) => {
+    console.error('❌ [DOWNLOAD ERROR]:', err);
+    sendUpdateStatus({ status: 'error', error: err ? err.message : 'İndirme hatası' });
+  });
 });
 
 ipcMain.on('quit-and-install', () => {
-  if (app.isPackaged) {
-    autoUpdater.quitAndInstall();
+  if (app.isPackaged && !isPortableBuild()) {
+    autoUpdater.quitAndInstall(false, true);
   }
 });
 

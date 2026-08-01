@@ -3,7 +3,9 @@ const path = require('path');
 const fs = require('fs');
 
 async function main() {
-  const exePath = path.join(__dirname, '../release/win-unpacked/VoiceScribe.exe');
+  const pkg = require('../package.json');
+  const outDir = (pkg.build && pkg.build.directories && pkg.build.directories.output) || 'release';
+  const exePath = path.join(__dirname, '..', outDir, 'win-unpacked', 'VoiceScribe.exe');
   const iconPath = path.join(__dirname, '../electron/icon.ico');
 
   if (!fs.existsSync(exePath)) {

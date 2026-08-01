@@ -6,6 +6,8 @@ node_modules/
 # Production Builds & Output
 dist/
 release/
+release-*/
+main.js
 build/
 *.exe
 *.blockmap

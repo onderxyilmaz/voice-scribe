@@ -3,7 +3,7 @@ import { Settings, Cpu, Sparkles, BookOpen, Mic, History, PanelLeftClose, PanelL
 
 export default function Sidebar({ activeTab, setActiveTab }) {
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const [appVersion, setAppVersion] = useState('1.0.2');
+  const [appVersion, setAppVersion] = useState('—');
 
   useEffect(() => {
     if (window.api && window.api.getAppVersion) {
