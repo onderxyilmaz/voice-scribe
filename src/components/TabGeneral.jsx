@@ -1,10 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { Keyboard, ClipboardCheck, Volume2, Sliders, Check, RotateCcw, Palette } from 'lucide-react';
+import { Keyboard, ClipboardCheck, Volume2, Sliders, Check, RotateCcw, Palette, RefreshCw, Download, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function TabGeneral({ config, setConfig, saveConfig }) {
   const [isRecordingKey, setIsRecordingKey] = useState(false);
   const [recordedCombo, setRecordedCombo] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Auto-Update States
+  const [updateStatus, setUpdateStatus] = useState({ status: 'idle', version: '1.0.0' });
+
+  useEffect(() => {
+    if (window.api && window.api.onUpdateStatus) {
+      const cleanup = window.api.onUpdateStatus((data) => {
+        setUpdateStatus(data);
+      });
+      return cleanup;
+    }
+  }, []);
+
+  const handleCheckForUpdates = () => {
+    setUpdateStatus({ status: 'checking', version: '1.0.0' });
+    if (window.api && window.api.checkForUpdates) {
+      window.api.checkForUpdates();
+    }
+  };
+
+  const handleDownloadUpdate = () => {
+    if (window.api && window.api.downloadUpdate) {
+      window.api.downloadUpdate();
+    }
+  };
+
+  const handleQuitAndInstall = () => {
+    if (window.api && window.api.quitAndInstall) {
+      window.api.quitAndInstall();
+    }
+  };
 
   const formatDisplayHotkey = (hotkey) => {
     if (!hotkey) return 'Ctrl + Space';
@@ -112,7 +143,69 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-white mb-1">Genel Ayarlar</h2>
-        <p className="text-xs text-gray-400">Kısayol tuşları, tema seçimi, yapıştırma davranışı ve ses tercihlerini yönetin.</p>
+        <p className="text-xs text-gray-400">Kısayol tuşları, tema seçimi, otomatik güncelleme ve ses tercihlerini yönetin.</p>
+      </div>
+
+      {/* Auto-Update Control Card */}
+      <div className="glass-card p-5 space-y-4 border-indigo-500/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <RefreshCw className={`w-5 h-5 ${updateStatus.status === 'checking' ? 'animate-spin' : ''}`} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                Yazılım Güncellemeleri
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  v1.0.0
+                </span>
+              </h3>
+              <p className="text-xs text-gray-400">
+                {updateStatus.status === 'checking' && 'GitHub Releases adresi denetleniyor...'}
+                {updateStatus.status === 'latest' && 'Tebrikler, en son VoiceScribe sürümünü (v1.0.0) kullanıyorsunuz!'}
+                {updateStatus.status === 'available' && `Yeni Güncelleme Mevcut: v${updateStatus.version}`}
+                {updateStatus.status === 'downloading' && `İndiriliyor: %${updateStatus.percent || 0}`}
+                {updateStatus.status === 'downloaded' && 'Güncelleme başarıyla indirildi. Yüklemek için yeniden başlatın.'}
+                {updateStatus.status === 'idle' && 'En yeni sürümleri ve güvenlik iyileştirmelerini kontrol edin.'}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            {updateStatus.status === 'available' && (
+              <button
+                onClick={handleDownloadUpdate}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+              >
+                <Download className="w-4 h-4" /> İndir (v{updateStatus.version})
+              </button>
+            )}
+
+            {updateStatus.status === 'downloaded' && (
+              <button
+                onClick={handleQuitAndInstall}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer animate-pulse"
+              >
+                <Sparkles className="w-4 h-4" /> Şimdi Kur & Yeniden Başlat
+              </button>
+            )}
+
+            {(updateStatus.status === 'idle' || updateStatus.status === 'latest') && (
+              <button
+                onClick={handleCheckForUpdates}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-white/10"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Güncellemeleri Denetle
+              </button>
+            )}
+
+            {updateStatus.status === 'checking' && (
+              <span className="text-xs text-indigo-300 font-semibold flex items-center gap-1 animate-pulse">
+                Denetleniyor...
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Theme Selection Card */}
@@ -200,7 +293,6 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
                   {recordedCombo || 'Tuşlara basın...'}
                 </div>
 
-                {/* Clear, High-Contrast Save Button */}
                 <button
                   onClick={handleSaveHotkey}
                   disabled={!recordedCombo}
@@ -215,7 +307,6 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
                   <Check className="w-3.5 h-3.5" /> Kaydet
                 </button>
 
-                {/* Cancel Button */}
                 <button
                   onClick={handleCancelRecord}
                   className="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer border border-white/10"

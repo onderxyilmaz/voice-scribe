@@ -1,6 +1,7 @@
 const { clipboard } = require('electron');
-const { exec } = require('child_process');
+const { execFile, exec } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 class TextInjector {
   /**
@@ -10,18 +11,23 @@ class TextInjector {
   static pasteText(text) {
     if (!text || text.trim() === '') return;
 
-    // Set transcription to Windows clipboard
+    // 1. Copy transcription text to Windows Clipboard
     clipboard.writeText(text);
 
-    // Call paste.ps1 script with P/Invoke keybd_event
-    const scriptPath = path.join(__dirname, 'paste.ps1');
-    const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`;
+    // 2. Execute fast native paste.exe or fallback to paste.ps1
+    const exePath = path.join(__dirname, 'paste.exe');
 
-    exec(cmd, (err, stdout, stderr) => {
-      if (err) {
-        console.error('Text injection error:', stderr || err);
-      }
-    });
+    if (fs.existsSync(exePath)) {
+      execFile(exePath, (err) => {
+        if (err) console.error('❌ Text injection error (exe):', err);
+      });
+    } else {
+      const scriptPath = path.join(__dirname, 'paste.ps1');
+      const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`;
+      exec(cmd, (err, stdout, stderr) => {
+        if (err) console.error('❌ Text injection error (ps1):', stderr || err);
+      });
+    }
   }
 }
 

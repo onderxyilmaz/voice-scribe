@@ -13,6 +13,11 @@
   "build": {
     "appId": "com.voicescribe.app",
     "productName": "VoiceScribe",
+    "publish": {
+      "provider": "github",
+      "owner": "onderxyilmaz",
+      "repo": "voice-scribe"
+    },
     "directories": {
       "output": "release"
     },
@@ -52,6 +57,7 @@
   "author": "Önder Yılmaz",
   "license": "MIT",
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "lucide-react": "^0.474.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

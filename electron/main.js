@@ -1,4 +1,5 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, nativeImage, clipboard } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const Store = require('./store');
@@ -14,6 +15,49 @@ const store = new Store();
 const audioEngine = new AudioEngine(store);
 
 let isRecording = false;
+
+// Configure Auto-Updater
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function sendUpdateStatus(data) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', data);
+  }
+}
+
+autoUpdater.on('checking-for-update', () => {
+  sendUpdateStatus({ status: 'checking' });
+});
+
+autoUpdater.on('update-available', (info) => {
+  sendUpdateStatus({
+    status: 'available',
+    version: info.version,
+    releaseNotes: info.releaseNotes
+  });
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  sendUpdateStatus({ status: 'latest', version: app.getVersion() });
+});
+
+autoUpdater.on('error', (err) => {
+  console.log('Update check info:', err ? err.message : '');
+  sendUpdateStatus({ status: 'latest', version: app.getVersion() });
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  sendUpdateStatus({
+    status: 'downloading',
+    percent: Math.round(progressObj.percent || 0),
+    bytesPerSecond: progressObj.bytesPerSecond
+  });
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  sendUpdateStatus({ status: 'downloaded', version: info.version });
+});
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
@@ -84,7 +128,7 @@ function createDashboardWindow() {
     frame: false,
     transparent: false,
     backgroundColor: '#0b0f19',
-    show: false, // Hidden initially while splash screen displays
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -99,7 +143,6 @@ function createDashboardWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: 'dashboard' });
   }
 
-  // Smooth transition from Splash Screen to Main Window
   mainWindow.once('ready-to-show', () => {
     setTimeout(() => {
       if (splashWindow && !splashWindow.isDestroyed()) {
@@ -110,7 +153,7 @@ function createDashboardWindow() {
         mainWindow.show();
         mainWindow.focus();
       }
-    }, 1500); // Display splash screen for 1.5s
+    }, 1500);
   });
 
   mainWindow.on('closed', () => {
@@ -200,12 +243,12 @@ function registerGlobalHotkeys() {
 
 app.whenReady().then(() => {
   console.log(`\n🚀 [SYSTEM STARTED] VoiceScribe Windows 11 Masaüstü Uygulaması Başlatıldı.`);
-  createSplashWindow(); // Display splash screen immediately on launch
+  createSplashWindow();
   createHUDWindow();
   setupTray();
   registerGlobalHotkeys();
 
-  createDashboardWindow(); // Prepare dashboard window in background
+  createDashboardWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createDashboardWindow();
@@ -239,6 +282,32 @@ ipcMain.on('close-window', () => {
 
 ipcMain.on('quit-app', () => {
   quitApplication();
+});
+
+ipcMain.on('check-for-updates', () => {
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates().catch(() => {
+      sendUpdateStatus({ status: 'latest', version: app.getVersion() });
+    });
+  } else {
+    // In development mode, simulate update check
+    sendUpdateStatus({ status: 'checking' });
+    setTimeout(() => {
+      sendUpdateStatus({ status: 'latest', version: app.getVersion() });
+    }, 1200);
+  }
+});
+
+ipcMain.on('download-update', () => {
+  if (app.isPackaged) {
+    autoUpdater.downloadUpdate();
+  }
+});
+
+ipcMain.on('quit-and-install', () => {
+  if (app.isPackaged) {
+    autoUpdater.quitAndInstall();
+  }
 });
 
 ipcMain.handle('get-config', () => store.config);
