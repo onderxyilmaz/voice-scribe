@@ -7,7 +7,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Auto-Update States
-  const [updateStatus, setUpdateStatus] = useState({ status: 'idle', version: '1.0.0' });
+  const [updateStatus, setUpdateStatus] = useState({ status: 'idle', version: '1.0.2' });
 
   useEffect(() => {
     if (window.api && window.api.onUpdateStatus) {
@@ -19,7 +19,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
   }, []);
 
   const handleCheckForUpdates = () => {
-    setUpdateStatus({ status: 'checking', version: '1.0.0' });
+    setUpdateStatus({ status: 'checking', version: '1.0.2' });
     if (window.api && window.api.checkForUpdates) {
       window.api.checkForUpdates();
     }
@@ -157,12 +157,12 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 Yazılım Güncellemeleri
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  v1.0.0
+                  v1.0.2
                 </span>
               </h3>
               <p className="text-xs text-gray-400">
                 {updateStatus.status === 'checking' && 'GitHub Releases adresi denetleniyor...'}
-                {updateStatus.status === 'latest' && 'Tebrikler, en son VoiceScribe sürümünü (v1.0.0) kullanıyorsunuz!'}
+                {updateStatus.status === 'latest' && 'Tebrikler, en son VoiceScribe sürümünü kullanıyorsunuz!'}
                 {updateStatus.status === 'available' && `Yeni Güncelleme Mevcut: v${updateStatus.version}`}
                 {updateStatus.status === 'downloading' && `İndiriliyor: %${updateStatus.percent || 0}`}
                 {updateStatus.status === 'downloaded' && 'Güncelleme başarıyla indirildi. Yüklemek için yeniden başlatın.'}

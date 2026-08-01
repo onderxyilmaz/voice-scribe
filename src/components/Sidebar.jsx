@@ -106,7 +106,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
       <div className={`mt-2.5 pt-2.5 pb-1 border-t border-white/5 text-[11px] text-gray-400 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between px-2'}`}>
         {!isCollapsed ? (
           <>
-            <span>Sürüm 1.0.0</span>
+            <span>Sürüm 1.0.2</span>
             <span className="inline-flex items-center gap-1 text-emerald-400">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Aktif
             </span>
@@ -115,7 +115,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
           <div className="relative group cursor-pointer">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse block" />
             <div className="absolute left-full ml-3 px-2.5 py-1 bg-slate-900 text-emerald-400 text-[10px] font-semibold rounded-lg shadow-xl border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
-              v1.0.0 Aktif
+              v1.0.2 Aktif
             </div>
           </div>
         )}
