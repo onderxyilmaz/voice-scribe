@@ -1,0 +1,275 @@
+:root {
+  --font-fluent: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  
+  /* Theme 1: Dark Obsidian (Default) */
+  --bg-app-body: #0b0f19;
+  --bg-sidebar-body: #070a12;
+  --bg-titlebar-body: #080b12;
+  --card-bg: rgba(255, 255, 255, 0.03);
+  --card-hover: rgba(255, 255, 255, 0.06);
+  --accent-color: #6366f1;
+  --accent-glow: rgba(99, 102, 241, 0.4);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --text-primary: #f3f4f6;
+  --text-muted: #9ca3af;
+}
+
+/* Theme 2: Midnight Lavender (Color Hunt #070F2B #1B1A55 #535C91 #9290C3) */
+[data-theme="lavender"] {
+  --bg-app-body: #070F2B;
+  --bg-sidebar-body: #050A1E;
+  --bg-titlebar-body: #040818;
+  --card-bg: rgba(27, 26, 85, 0.55);
+  --card-hover: rgba(27, 26, 85, 0.85);
+  --accent-color: #9290C3;
+  --accent-glow: rgba(146, 144, 195, 0.5);
+  --border-subtle: rgba(83, 92, 145, 0.4);
+  --text-primary: #f0f0ff;
+  --text-muted: #9290C3;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--font-fluent);
+}
+
+body {
+  background-color: transparent;
+  color: var(--text-primary);
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dynamic Theme Root Classes */
+.theme-app-bg {
+  background-color: var(--bg-app-body) !important;
+}
+
+.theme-sidebar-bg {
+  background-color: var(--bg-sidebar-body) !important;
+}
+
+.theme-titlebar-bg {
+  background-color: var(--bg-titlebar-body) !important;
+}
+
+.theme-accent-color {
+  color: var(--accent-color) !important;
+}
+
+.theme-accent-bg {
+  background-color: var(--accent-color) !important;
+}
+
+.theme-border {
+  border-color: var(--border-subtle) !important;
+}
+
+/* Flex & Layout Utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1 1 0%; min-height: 0; }
+.shrink-0 { flex-shrink: 0; }
+.min-h-0 { min-height: 0 !important; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 0.25rem; }
+.gap-1\.5 { gap: 0.375rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-2\.5 { gap: 0.625rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (min-width: 768px) {
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.w-full { width: 100%; }
+.w-screen { width: 100vw; }
+.h-full { height: 100%; }
+.h-screen { height: 100vh; }
+.w-64 { width: 16rem; }
+.w-48 { width: 12rem; }
+.w-9 { width: 2.25rem; height: 2.25rem; }
+.w-8 { width: 2rem; height: 2rem; }
+.w-6 { width: 1.5rem; height: 1.5rem; }
+.w-5 { width: 1.25rem; height: 1.25rem; }
+.w-4 { width: 1rem; height: 1rem; }
+.w-3\.5 { width: 0.875rem; height: 0.875rem; }
+.w-3 { width: 0.75rem; height: 0.75rem; }
+.w-\[120px\] { min-width: 120px; }
+.max-h-80 { max-height: 20rem; }
+.max-h-\[460px\] { max-height: 460px; }
+
+/* Critical Overflow Utilities */
+.overflow-hidden { overflow: hidden !important; }
+.overflow-y-auto { 
+  overflow-y: auto !important; 
+  max-height: calc(100vh - 40px);
+}
+
+.p-1 { padding: 0.25rem; }
+.p-1\.5 { padding: 0.375rem; }
+.p-2 { padding: 0.5rem; }
+.p-2\.5 { padding: 0.625rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-5 { padding: 1.25rem; }
+.p-6 { padding: 1.5rem; }
+.p-8 { padding: 2rem; }
+.p-12 { padding: 3rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-3\.5 { padding-left: 0.875rem; padding-right: 0.875rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-5 { padding-left: 1.25rem; padding-right: 1.25rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.pt-2 { padding-top: 0.5rem; }
+.pl-10 { padding-left: 2.5rem; }
+.pr-4 { padding-right: 1rem; }
+.pr-1 { padding-right: 0.25rem; }
+
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+
+.space-y-1 > * + * { margin-top: 0.25rem; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.space-y-3 > * + * { margin-top: 0.75rem; }
+.space-y-4 > * + * { margin-top: 1rem; }
+.space-y-6 > * + * { margin-top: 1.5rem; }
+
+.rounded-md { border-radius: 0.375rem; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-xl { border-radius: 0.75rem; }
+.rounded-full { border-radius: 9999px; }
+
+/* Text & Typography */
+.text-\[10px\] { font-size: 10px; }
+.text-\[11px\] { font-size: 11px; }
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-base { font-size: 1rem; line-height: 1.5rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+.font-mono { font-family: monospace; }
+.tracking-wide { letter-spacing: 0.025em; }
+
+.text-white { color: #ffffff; }
+.text-gray-100 { color: #f3f4f6; }
+.text-gray-200 { color: #e5e7eb; }
+.text-gray-300 { color: #d1d5db; }
+.text-gray-400 { color: var(--text-muted); }
+.text-gray-500 { color: #6b7280; }
+.text-indigo-300 { color: #a5b4fc; }
+.text-indigo-400 { color: var(--accent-color); }
+.text-purple-200 { color: #e9d5ff; }
+.text-purple-300 { color: #d8b4fe; }
+.text-purple-400 { color: #c084fc; }
+.text-red-400 { color: #f87171; }
+.text-amber-300 { color: #fcd34d; }
+.text-amber-400 { color: #fbbf24; }
+.text-emerald-400 { color: #34d399; }
+
+/* Colors & Backdrops */
+.bg-white\/5 { background-color: rgba(255, 255, 255, 0.05); }
+.bg-white\/10 { background-color: rgba(255, 255, 255, 0.1); }
+.bg-slate-900\/40 { background-color: var(--bg-titlebar-body); }
+.bg-slate-900\/80 { background-color: var(--card-bg); }
+.bg-slate-900\/90 { background-color: var(--card-bg); }
+.bg-slate-950\/40 { background-color: var(--bg-sidebar-body); }
+.bg-slate-950\/80 { background-color: var(--bg-app-body); }
+.bg-slate-800 { background-color: var(--card-bg); }
+.bg-indigo-600 { background-color: var(--accent-color); }
+.bg-indigo-600\/20 { background-color: rgba(99, 102, 241, 0.2); }
+.bg-indigo-600\/30 { background-color: rgba(99, 102, 241, 0.3); }
+.bg-indigo-500 { background-color: var(--accent-color); }
+.bg-indigo-500\/10 { background-color: rgba(99, 102, 241, 0.1); }
+.bg-indigo-500\/20 { background-color: rgba(99, 102, 241, 0.2); }
+
+.border { border-width: 1px; border-style: solid; }
+.border-b { border-bottom-width: 1px; border-bottom-style: solid; }
+.border-t { border-top-width: 1px; border-top-style: solid; }
+.border-r { border-right-width: 1px; border-right-style: solid; }
+.border-white\/5 { border-color: var(--border-subtle); }
+.border-white\/10 { border-color: var(--border-subtle); }
+.border-white\/20 { border-color: var(--border-subtle); }
+.border-indigo-500 { border-color: var(--accent-color); }
+.border-indigo-500\/20 { border-color: var(--border-subtle); }
+.border-indigo-500\/30 { border-color: var(--border-subtle); }
+.border-indigo-500\/40 { border-color: var(--accent-color); }
+
+/* Glassmorphism & Cards */
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  background: var(--card-hover);
+  border-color: var(--accent-color);
+}
+
+.glass-hud {
+  background: var(--bg-titlebar-body);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 20px var(--accent-glow);
+  border-radius: 9999px;
+}
+
+.glass-hud-recording {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 24px rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-titlebar-body);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-color);
+  border-radius: 4px;
+  opacity: 0.7;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-color);
+  opacity: 1;
+}
+
+/* Drag Region for Windows 11 Titlebars */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}

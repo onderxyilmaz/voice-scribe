@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production Builds & Output
+dist/
+release/
+build/
+*.exe
+*.blockmap
+
+# Environment & API Keys / User Config
+.env
+.env.local
+.env.*.local
+config.json
+history.json
+
+# Python Virtual Environment & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Editor & OS Files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.user

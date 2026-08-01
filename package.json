@@ -1,0 +1,67 @@
+{
+  "name": "voicescribe",
+  "version": "1.0.0",
+  "description": "VoiceScribe — Windows 11 için Akıllı ve Fluent Tasarımlı Sesli Dikte (Voice-to-Text) Uygulaması",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:dev": "concurrently -k \"vite\" \"electron .\"",
+    "start": "electron .",
+    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& vite build && electron-builder --win --dir && node python/stamp_icon.js && electron-builder --win nsis portable --prepackaged release/win-unpacked"
+  },
+  "build": {
+    "appId": "com.voicescribe.app",
+    "productName": "VoiceScribe",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "python/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "electron/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VoiceScribe",
+      "installerIcon": "electron/icon.ico",
+      "uninstallerIcon": "electron/icon.ico",
+      "installerHeaderIcon": "electron/icon.ico",
+      "installerHeader": "electron/icon.png"
+    }
+  },
+  "keywords": [
+    "voicescribe",
+    "dictation",
+    "whisper",
+    "voice-to-text",
+    "windows11",
+    "ai"
+  ],
+  "author": "Önder Yılmaz",
+  "license": "MIT",
+  "dependencies": {
+    "lucide-react": "^0.474.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "electron": "^34.0.2",
+    "electron-builder": "^25.1.8",
+    "rcedit": "^5.0.2",
+    "vite": "^6.1.0"
+  }
+}
