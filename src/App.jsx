@@ -4,6 +4,8 @@ import TabGeneral from './components/TabGeneral';
 import TabModels from './components/TabModels';
 import TabCleanup from './components/TabCleanup';
 import TabVocabulary from './components/TabVocabulary';
+import TabSnippets from './components/TabSnippets';
+import TabActions from './components/TabActions';
 import TabMeeting from './components/TabMeeting';
 import TabHistory from './components/TabHistory';
 import FloatingHUD from './components/FloatingHUD';
@@ -105,6 +107,8 @@ export default function App() {
           {activeTab === 'models' && <TabModels config={config} setConfig={setConfig} saveConfig={saveConfig} />}
           {activeTab === 'cleanup' && <TabCleanup config={config} setConfig={setConfig} saveConfig={saveConfig} />}
           {activeTab === 'vocabulary' && <TabVocabulary config={config} setConfig={setConfig} saveConfig={saveConfig} />}
+          {activeTab === 'snippets' && <TabSnippets config={config} setConfig={setConfig} saveConfig={saveConfig} />}
+          {activeTab === 'actions' && <TabActions config={config} setConfig={setConfig} saveConfig={saveConfig} />}
           {activeTab === 'meeting' && <TabMeeting />}
           {activeTab === 'history' && <TabHistory />}
         </div>

@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { History, Search, Copy, Check, Trash2, Calendar, Clock } from 'lucide-react';
+import { History, Search, Copy, Check, Trash2, Calendar, Clock, AlertTriangle } from 'lucide-react';
 
 export default function TabHistory() {
   const [history, setHistory] = useState([]);
   const [search, setSearch] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({
+    isOpen: false,
+    type: 'single', // 'single' | 'all'
+    targetId: null
+  });
 
   useEffect(() => {
     loadHistory();
@@ -35,11 +40,27 @@ export default function TabHistory() {
     setTimeout(() => setCopiedId(null), 1500);
   };
 
-  const handleClearAll = async () => {
-    if (window.api) {
-      await window.api.clearHistory();
+  const handleOpenDeleteModal = (type, targetId = null) => {
+    setDeleteModal({
+      isOpen: true,
+      type,
+      targetId
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (deleteModal.type === 'single' && deleteModal.targetId) {
+      if (window.api) {
+        await window.api.deleteHistoryItem(deleteModal.targetId);
+      }
+      setHistory(prev => prev.filter(item => item.id !== deleteModal.targetId));
+    } else if (deleteModal.type === 'all') {
+      if (window.api) {
+        await window.api.clearHistory();
+      }
       setHistory([]);
     }
+    setDeleteModal({ isOpen: false, type: 'single', targetId: null });
   };
 
   const filteredHistory = history.filter(item =>
@@ -56,7 +77,7 @@ export default function TabHistory() {
 
         {history.length > 0 && (
           <button
-            onClick={handleClearAll}
+            onClick={() => handleOpenDeleteModal('all')}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-xs font-semibold transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" /> Tümünü Temizle
@@ -108,6 +129,13 @@ export default function TabHistory() {
                   >
                     {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
+                  <button
+                    onClick={() => handleOpenDeleteModal('single', item.id)}
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-red-600/80 text-red-400 hover:text-white transition-colors"
+                    title="Sil"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 
@@ -126,6 +154,49 @@ export default function TabHistory() {
           ))
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="glass-card p-6 max-w-md w-full border border-white/10 shadow-2xl space-y-4 rounded-2xl bg-slate-900/95">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-full bg-red-500/20 text-red-400">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  {deleteModal.type === 'single' ? 'Kayıt Silinsin mi?' : 'Tüm Geçmiş Silinsin mi?'}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {deleteModal.type === 'single'
+                    ? 'Bu transkripsiyon kaydı kalıcı olarak silinecek.'
+                    : 'Tüm transkripsiyon geçmişiniz kalıcı olarak silinecek.'}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-300 bg-white/5 p-3 rounded-xl border border-white/5">
+              Bu işlem geri alınamaz. Devam etmek istiyor musunuz?
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setDeleteModal({ isOpen: false, type: 'single', targetId: null })}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold transition-colors"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                {deleteModal.type === 'single' ? 'Kaydı Sil' : 'Tümünü Sil'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

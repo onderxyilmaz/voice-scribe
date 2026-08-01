@@ -5,6 +5,7 @@ const fs = require('fs');
 const Store = require('./store');
 const AudioEngine = require('./audioEngine');
 const TextInjector = require('./textInjector');
+const windowsActions = require('./windowsActions');
 
 let mainWindow = null;
 let hudWindow = null;
@@ -319,7 +320,9 @@ ipcMain.handle('save-config', (event, config) => {
 
 ipcMain.handle('get-history', () => store.history);
 ipcMain.handle('add-history-item', (event, item) => store.addHistoryItem(item));
+ipcMain.handle('delete-history-item', (event, id) => store.deleteHistoryItem(id));
 ipcMain.handle('clear-history', () => store.clearHistory());
+ipcMain.handle('execute-windows-action', (event, action) => windowsActions.executeCommand(action));
 
 ipcMain.on('start-recording', () => startRecording());
 ipcMain.on('stop-recording', () => stopRecording());
@@ -361,7 +364,27 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer) => {
     if (hudWindow) {
       hudWindow.webContents.send('recording-state-changed', { status: 'cleaning' });
     }
-    const cleanText = await audioEngine.cleanText(rawText);
+    let cleanText = await audioEngine.cleanText(rawText);
+
+    // Check Windows Voice Actions
+    const actionResult = windowsActions.processText(cleanText, store.config);
+    if (actionResult.handled) {
+      console.log(`⚡ [ACTION EXECUTED] Sesli aksiyon çalıştırıldı, metin yapıştırma atlanıyor.`);
+      store.addHistoryItem({
+        rawText,
+        cleanText: `⚡ Aksiyon: "${actionResult.action.trigger}" (${actionResult.action.command})`,
+        provider: store.config.sttProvider,
+        duration: '00:02'
+      });
+      if (hudWindow) {
+        hudWindow.webContents.send('recording-state-changed', { status: 'success', text: `⚡ Aksiyon: ${actionResult.action.trigger}` });
+        setTimeout(() => hudWindow.hide(), 1800);
+      }
+      try { fs.unlinkSync(audioPath); } catch (e) {}
+      return { success: true, actionHandled: true, action: actionResult.action };
+    }
+
+    cleanText = audioEngine.applySnippets(cleanText);
 
     console.log(`📋 [AUTO PASTE] Metin panoya kopyalanıyor ve aktif imleç konumuna yazılıyor...`);
     if (store.config.autoPaste) {

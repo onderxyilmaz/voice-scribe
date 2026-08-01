@@ -6,7 +6,10 @@ contextBridge.exposeInMainWorld('api', {
   
   getHistory: () => ipcRenderer.invoke('get-history'),
   addHistoryItem: (item) => ipcRenderer.invoke('add-history-item', item),
+  deleteHistoryItem: (id) => ipcRenderer.invoke('delete-history-item', id),
   clearHistory: () => ipcRenderer.invoke('clear-history'),
+
+  executeWindowsAction: (action) => ipcRenderer.invoke('execute-windows-action', action),
 
   startRecording: () => ipcRenderer.send('start-recording'),
   stopRecording: () => ipcRenderer.send('stop-recording'),

@@ -109,6 +109,16 @@ class Store {
     return historyItem;
   }
 
+  deleteHistoryItem(id) {
+    this.history = this.history.filter(item => item.id !== id);
+    try {
+      fs.writeFileSync(this.historyPath, JSON.stringify(this.history, null, 2), 'utf8');
+    } catch (e) {
+      console.error('Delete history item error:', e);
+    }
+    return this.history;
+  }
+
   clearHistory() {
     this.history = [];
     try {

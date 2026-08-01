@@ -292,6 +292,35 @@ SADECE TEMİZLENMİŞ METNİ DÖNDÜR. Ekstra açıklama veya tırnak ekleme.`;
       return processedText;
     }
   }
+
+  /**
+   * Voice Snippets / Text Expansion Engine
+   */
+  applySnippets(text) {
+    const config = this.store.config;
+    if (config.enableSnippets === false || !text || typeof text !== 'string') {
+      return text;
+    }
+
+    const snippets = config.snippets || [
+      { trigger: 'ev adresim', expansion: 'İstiklal Cad. No:45 Daire:12 Beyoğlu / İstanbul' },
+      { trigger: 'banka ibanım', expansion: 'TR33 0006 1000 0000 1234 5678 90 (Garanti BBVA)' }
+    ];
+
+    let result = text;
+    snippets.forEach(item => {
+      if (item.trigger && item.expansion) {
+        const escaped = item.trigger.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+        if (regex.test(result)) {
+          result = result.replace(regex, item.expansion);
+          console.log(`🚀 [SNIPPET EXPANDED] "${item.trigger}" ➔ "${item.expansion}"`);
+        }
+      }
+    });
+
+    return result;
+  }
 }
 
 module.exports = AudioEngine;
