@@ -20,6 +20,15 @@ let isRecording = false;
 // Configure Auto-Updater
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
+try {
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'onderxyilmaz',
+    repo: 'voice-scribe'
+  });
+} catch (e) {
+  console.log('autoUpdater setFeedURL note:', e.message);
+}
 
 function sendUpdateStatus(data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
