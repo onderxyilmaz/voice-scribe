@@ -53,8 +53,8 @@ autoUpdater.on('update-not-available', (info) => {
 });
 
 autoUpdater.on('error', (err) => {
-  console.log('Update check info:', err ? err.message : '');
-  sendUpdateStatus({ status: 'latest', version: app.getVersion() });
+  console.error('❌ [UPDATE ERROR]:', err ? err.message : '');
+  sendUpdateStatus({ status: 'error', error: err ? err.message : 'Güncelleme hatası' });
 });
 
 autoUpdater.on('download-progress', (progressObj) => {
@@ -314,7 +314,11 @@ ipcMain.on('check-for-updates', () => {
 
 ipcMain.on('download-update', () => {
   if (app.isPackaged) {
-    autoUpdater.downloadUpdate();
+    console.log('📥 [AUTO-UPDATER] Güncelleme indirmesi başlatıldı...');
+    autoUpdater.downloadUpdate().catch((err) => {
+      console.error('❌ [DOWNLOAD ERROR]:', err);
+      sendUpdateStatus({ status: 'error', error: err ? err.message : 'İndirme hatası' });
+    });
   }
 });
 

@@ -33,6 +33,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
   };
 
   const handleDownloadUpdate = () => {
+    setUpdateStatus({ status: 'downloading', percent: 0 });
     if (window.api && window.api.downloadUpdate) {
       window.api.downloadUpdate();
     }
@@ -173,6 +174,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
                 {updateStatus.status === 'available' && `Yeni Güncelleme Mevcut: v${updateStatus.version}`}
                 {updateStatus.status === 'downloading' && `İndiriliyor: %${updateStatus.percent || 0}`}
                 {updateStatus.status === 'downloaded' && 'Güncelleme başarıyla indirildi. Yüklemek için yeniden başlatın.'}
+                {updateStatus.status === 'error' && `Güncelleme Kontrolü: ${updateStatus.error || 'İndirme tamamlanamadı'}`}
                 {updateStatus.status === 'idle' && 'En yeni sürümleri ve güvenlik iyileştirmelerini kontrol edin.'}
               </p>
             </div>
@@ -186,6 +188,13 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
               >
                 <Download className="w-4 h-4" /> İndir (v{updateStatus.version})
               </button>
+            )}
+
+            {updateStatus.status === 'downloading' && (
+              <span className="px-4 py-2 bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                İndiriliyor %{updateStatus.percent || 0}...
+              </span>
             )}
 
             {updateStatus.status === 'downloaded' && (
