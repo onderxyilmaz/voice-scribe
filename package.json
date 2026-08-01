@@ -1,6 +1,6 @@
 {
   "name": "voicescribe",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "VoiceScribe — Windows 11 için Akıllı ve Fluent Tasarımlı Sesli Dikte (Voice-to-Text) Uygulaması",
   "main": "electron/main.js",
   "scripts": {

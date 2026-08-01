@@ -67,6 +67,10 @@ autoUpdater.on('download-progress', (progressObj) => {
 
 autoUpdater.on('update-downloaded', (info) => {
   sendUpdateStatus({ status: 'downloaded', version: info.version });
+  console.log(`📦 [UPDATE DOWNLOADED] Sürüm v${info.version} indirildi. Uygulama güncelleniyor ve yeniden başlatılıyor...`);
+  setTimeout(() => {
+    autoUpdater.quitAndInstall(false, true);
+  }, 1500);
 });
 
 function createSplashWindow() {
