@@ -103,7 +103,7 @@ npm run dist:win
 npm run dist:win:unsigned
 ```
 
-`publisherName` `package.json` içinde yayıncı adıyla uyumlu olmalı (sertifikadaki Common Name).
+`publisherName` sertifikadaki Common Name ile uyumlu olmalıdır; imza etkinleştirildiğinde `package.json` → `build.win` altına eklenebilir.
 
 İmzalı Setup’ı indirme sayısı arttıkça SmartScreen uyarısı zamanla azalır; yeni sürüm hash’lerinde uyarı yeniden görülebilir.
 

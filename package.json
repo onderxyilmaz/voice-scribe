@@ -64,10 +64,7 @@
         "portable"
       ],
       "icon": "electron/icon.ico",
-      "signAndEditExecutable": true,
-      "publisherName": [
-        "Önder Yılmaz"
-      ]
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
