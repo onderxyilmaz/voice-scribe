@@ -5,6 +5,8 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
   const [isRecordingKey, setIsRecordingKey] = useState(false);
   const [recordedCombo, setRecordedCombo] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [hotkeyError, setHotkeyError] = useState('');
+  const [hotkeyWarning, setHotkeyWarning] = useState('');
 
   // Auto-Update States
   const [currentVersion, setCurrentVersion] = useState('—');
@@ -17,12 +19,28 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
       });
     }
 
+    const cleanups = [];
+
     if (window.api && window.api.onUpdateStatus) {
-      const cleanup = window.api.onUpdateStatus((data) => {
+      cleanups.push(window.api.onUpdateStatus((data) => {
         setUpdateStatus(data);
-      });
-      return cleanup;
+      }));
     }
+
+    if (window.api && window.api.onHotkeyStatus) {
+      cleanups.push(window.api.onHotkeyStatus((status) => {
+        if (!status) return;
+        if (status.ok) {
+          setHotkeyError('');
+          setHotkeyWarning(status.warning || '');
+        } else {
+          setHotkeyError(status.error || 'Kısayol kaydı başarısız.');
+          setHotkeyWarning('');
+        }
+      }));
+    }
+
+    return () => cleanups.forEach((fn) => typeof fn === 'function' && fn());
   }, []);
 
   const handleCheckForUpdates = () => {
@@ -46,7 +64,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
   };
 
   const formatDisplayHotkey = (hotkey) => {
-    if (!hotkey) return 'Ctrl + Space';
+    if (!hotkey) return 'Ctrl + Shift + Space';
     return hotkey
       .replace(/CommandOrControl/gi, 'Ctrl')
       .replace(/Control/gi, 'Ctrl')
@@ -95,26 +113,41 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
     }
   };
 
-  const handleSaveHotkey = () => {
+  const applyHotkeyStatus = (status) => {
+    if (!status) return;
+    if (status.ok) {
+      setHotkeyError('');
+      setHotkeyWarning(status.warning || '');
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2000);
+    } else {
+      setSavedSuccess(false);
+      setHotkeyError(status.error || 'Kısayol kaydı başarısız.');
+      setHotkeyWarning('');
+    }
+  };
+
+  const handleSaveHotkey = async () => {
     if (!recordedCombo) {
       handleCancelRecord();
       return;
     }
-    
+
     const electronHotkey = recordedCombo
       .replace(/Ctrl/g, 'CommandOrControl')
       .replace(/\s\+\s/g, '+');
 
     const updated = { ...config, hotkey: electronHotkey };
     setConfig(updated);
-    saveConfig(updated);
-
     setIsRecordingKey(false);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
 
-    if (window.api) {
-      window.api.resumeHotkey();
+    const result = await saveConfig(updated);
+    applyHotkeyStatus(result?.hotkeyStatus);
+
+    // save-config already re-registers; resume is only needed after cancel/pause paths
+    if (window.api?.resumeHotkey && !result?.hotkeyStatus) {
+      const status = await window.api.resumeHotkey();
+      applyHotkeyStatus(status);
     }
   };
 
@@ -280,7 +313,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">Global Kısayol Tuşu</h3>
-              <p className="text-xs text-gray-400">Her yerden dikteyi başlatmak veya durdurmak için kullanılacak tuş kombinasyonu.</p>
+              <p className="text-xs text-gray-400">Her yerden dikteyi başlat/durdur. Varsayılan: Ctrl+Shift+Space (Ctrl+Space IME ile çakışabilir).</p>
             </div>
           </div>
 
@@ -295,7 +328,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
                 >
                   {formatDisplayHotkey(config.hotkey)}
                 </button>
-                {savedSuccess && (
+                {savedSuccess && !hotkeyError && (
                   <span className="text-xs text-emerald-400 flex items-center gap-1 font-semibold">
                     <Check className="w-4 h-4" /> Kaydedildi
                   </span>
@@ -335,6 +368,13 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
             )}
           </div>
         </div>
+
+        {hotkeyError && (
+          <p className="text-xs text-red-400 leading-relaxed">{hotkeyError}</p>
+        )}
+        {!hotkeyError && hotkeyWarning && (
+          <p className="text-xs text-amber-300/90 leading-relaxed">{hotkeyWarning}</p>
+        )}
       </div>
 
       {/* Auto Paste Toggle */}
@@ -385,25 +425,52 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
         </div>
       </div>
 
-      {/* Silence Sensitivity Slider */}
-      <div className="glass-card p-5 space-y-3">
-        <div className="flex items-center gap-3 mb-2">
+      {/* Silence Sensitivity Controls */}
+      <div className="glass-card p-5 space-y-4">
+        <div className="flex items-center gap-3 mb-1">
           <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400">
             <Sliders className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Sessizlik & Gürültü Eşiği ({config.silenceThresholdDb || -55} dBFS)</h3>
-            <p className="text-xs text-gray-400">Sessiz kayıtların API'ye gitmesini engeller ("Altyazı M.K." gibi hatalı metinleri önler).</p>
+            <h3 className="text-sm font-semibold text-white">Sessizlik & Gürültü Algılama</h3>
+            <p className="text-xs text-gray-400">Sessiz kayıtların işlenmesini engeller. Değerler gerçek RMS (dBFS) analiziyle kullanılır.</p>
           </div>
         </div>
-        <input
-          type="range"
-          min="-70"
-          max="-30"
-          value={config.silenceThresholdDb || -55}
-          onChange={(e) => handleChange('silenceThresholdDb', parseInt(e.target.value))}
-          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-        />
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-300">Gürültü eşiği</span>
+            <span className="text-indigo-300 font-mono">{config.silenceThresholdDb ?? -55} dBFS</span>
+          </div>
+          <input
+            type="range"
+            min="-70"
+            max="-30"
+            value={config.silenceThresholdDb ?? -55}
+            onChange={(e) => handleChange('silenceThresholdDb', parseInt(e.target.value, 10))}
+            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+          />
+          <div className="flex justify-between text-[10px] text-gray-500">
+            <span>Daha hassas (-70)</span>
+            <span>Daha sıkı (-30)</span>
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-300">Minimum konuşma süresi</span>
+            <span className="text-indigo-300 font-mono">{Number(config.silenceMinDuration ?? 0.3).toFixed(1)} sn</span>
+          </div>
+          <input
+            type="range"
+            min="0.1"
+            max="1.5"
+            step="0.1"
+            value={config.silenceMinDuration ?? 0.3}
+            onChange={(e) => handleChange('silenceMinDuration', parseFloat(e.target.value))}
+            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+          />
+        </div>
       </div>
     </div>
   );

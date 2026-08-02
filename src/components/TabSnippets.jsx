@@ -16,20 +16,7 @@ export default function TabSnippets({ config, setConfig, saveConfig }) {
   const [editCategories, setEditCategories] = useState([]);
   const [editCategoryInput, setEditCategoryInput] = useState('');
 
-  const snippetsList = config.snippets || [
-    {
-      id: 'default-1',
-      trigger: 'ev adresim',
-      expansion: 'İstiklal Cad. No:45 Daire:12 Beyoğlu / İstanbul',
-      categories: ['Adres', 'Kişisel']
-    },
-    {
-      id: 'default-2',
-      trigger: 'banka ibanım',
-      expansion: 'TR33 0006 1000 0000 1234 5678 90 (Garanti BBVA)',
-      categories: ['Banka', 'Finans']
-    }
-  ];
+  const snippetsList = Array.isArray(config.snippets) ? config.snippets : [];
 
   const getItemCategories = (item) => {
     if (Array.isArray(item.categories) && item.categories.length > 0) {

@@ -39,26 +39,74 @@ export default function TabCleanup({ config, setConfig, saveConfig }) {
         </div>
       </div>
 
-      {/* Cleanup Model Selection */}
+      {/* Cleanup Provider + Model */}
       <div className="glass-card p-5 space-y-4">
         <div className="flex items-center gap-3">
           <Zap className="w-5 h-5 text-indigo-400" />
           <div>
-            <h3 className="text-sm font-semibold text-white">Temizleme Modeli</h3>
-            <p className="text-xs text-gray-400">Metin düzeltme için kullanılacak hızlı ve akıllı LLM modeli.</p>
+            <h3 className="text-sm font-semibold text-white">Temizleme Sağlayıcısı & Modeli</h3>
+            <p className="text-xs text-gray-400">API anahtarı API & Modeller sekmesinde tanımlanır. OpenRouter önerilir.</p>
           </div>
         </div>
 
-        <select
-          value={config.cleanupModel || 'google/gemini-2.5-flash-lite'}
-          onChange={(e) => handleChange('cleanupModel', e.target.value)}
-          className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
-        >
-          <option value="google/gemini-2.5-flash-lite">google/gemini-2.5-flash-lite (En Hızlı & Hafif)</option>
-          <option value="google/gemini-2.5-flash">google/gemini-2.5-flash (Gelişmiş Zeka)</option>
-          <option value="openai/gpt-4o-mini">openai/gpt-4o-mini (Standart OpenAI)</option>
-          <option value="anthropic/claude-3-5-haiku">anthropic/claude-3-5-haiku (Yüksek Doğruluk)</option>
-        </select>
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] text-gray-400 mb-1 block font-medium">Sağlayıcı</label>
+            <select
+              value={config.cleanupProvider || 'openrouter'}
+              onChange={(e) => handleChange('cleanupProvider', e.target.value)}
+              className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+            >
+              <option value="openrouter">OpenRouter (önerilen)</option>
+              <option value="groq">Groq</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+
+          {(config.cleanupProvider || 'openrouter') === 'openrouter' && (
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block font-medium">OpenRouter Model</label>
+              <select
+                value={config.cleanupModel || 'google/gemini-2.5-flash-lite'}
+                onChange={(e) => handleChange('cleanupModel', e.target.value)}
+                className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+              >
+                <option value="google/gemini-2.5-flash-lite">google/gemini-2.5-flash-lite (En Hızlı & Hafif)</option>
+                <option value="google/gemini-2.5-flash">google/gemini-2.5-flash (Gelişmiş Zeka)</option>
+                <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+                <option value="anthropic/claude-3.5-haiku">anthropic/claude-3.5-haiku</option>
+              </select>
+            </div>
+          )}
+
+          {config.cleanupProvider === 'groq' && (
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block font-medium">Groq Model</label>
+              <select
+                value={config.cleanupModelGroq || 'llama-3.1-8b-instant'}
+                onChange={(e) => handleChange('cleanupModelGroq', e.target.value)}
+                className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+              >
+                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+              </select>
+            </div>
+          )}
+
+          {config.cleanupProvider === 'openai' && (
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block font-medium">OpenAI Model</label>
+              <select
+                value={config.cleanupModelOpenAI || 'gpt-4o-mini'}
+                onChange={(e) => handleChange('cleanupModelOpenAI', e.target.value)}
+                className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+              >
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                <option value="gpt-4o">gpt-4o</option>
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Custom Cleanup Prompt */}

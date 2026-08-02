@@ -7,6 +7,7 @@ node_modules/
 dist/
 release/
 release-*/
+# Legacy root entry (app uses electron/main.js) — ignore stray copies
 main.js
 build/
 *.exe
@@ -26,6 +27,8 @@ __pycache__/
 venv/
 .venv/
 env/
+python-runtime/
+.cache/
 
 # Editor & OS Files
 .DS_Store

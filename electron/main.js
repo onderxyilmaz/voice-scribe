@@ -16,6 +16,30 @@ const store = new Store();
 const audioEngine = new AudioEngine(store);
 
 let isRecording = false;
+/** When false, arriving audio buffers are discarded (cancel path). */
+let acceptNextAudioBuffer = false;
+/** Prevents double-quit and allows clean updater restart (no hard process.exit). */
+let isAppQuitting = false;
+/** Epoch ms when current dictation recording started (for history duration). */
+let recordingStartedAt = null;
+
+function formatRecordingDuration(totalSeconds) {
+  const secs = Math.max(0, Math.round(Number(totalSeconds) || 0));
+  const mins = Math.floor(secs / 60);
+  const rem = secs % 60;
+  return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+}
+
+function resolveHistoryDuration(meta) {
+  if (meta && typeof meta.durationSeconds === 'number' && Number.isFinite(meta.durationSeconds)) {
+    return formatRecordingDuration(meta.durationSeconds);
+  }
+  if (recordingStartedAt) {
+    return formatRecordingDuration((Date.now() - recordingStartedAt) / 1000);
+  }
+  return '00:00';
+}
+
 
 // Configure Auto-Updater
 autoUpdater.autoDownload = false;
@@ -247,40 +271,65 @@ function createDashboardWindow() {
   });
 }
 
-function setupTray() {
-  const trayIconPath = path.join(__dirname, 'tray.png');
-  const icon = nativeImage.createFromPath(trayIconPath);
+function refreshTrayMenu() {
+  if (!tray) return;
+  const hotkeyLabel = (store.config.hotkey || 'CommandOrControl+Shift+Space')
+    .replace(/CommandOrControl/gi, 'Ctrl')
+    .replace(/\+/g, '+');
 
-  tray = new Tray(icon);
-  tray.setToolTip('VoiceScribe (Ctrl+Space)');
-
-  const contextMenu = Menu.buildFromTemplate([
-    { label: '🔴 Kaydı Başlat / Durdur (Ctrl+Space)', click: () => toggleRecording() },
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: `🔴 Kaydı Başlat / Durdur (${hotkeyLabel})`, click: () => toggleRecording() },
     { label: '🤖 AI Asistanına Sor', click: () => openDashboardWithTab('meeting') },
     { type: 'separator' },
     { label: '⚙️ Ayarlar Dashboard', click: () => createDashboardWindow() },
     { label: '📜 Geçmiş Vault', click: () => openDashboardWithTab('history') },
     { type: 'separator' },
     { label: '❌ Tamamen Çıkış', click: () => quitApplication() }
-  ]);
+  ]));
+}
 
-  tray.setContextMenu(contextMenu);
+function setupTray() {
+  const trayIconPath = path.join(__dirname, 'tray.png');
+  const icon = nativeImage.createFromPath(trayIconPath);
+
+  tray = new Tray(icon);
+  tray.setToolTip('VoiceScribe');
+  refreshTrayMenu();
   tray.on('double-click', () => createDashboardWindow());
 }
 
 function quitApplication() {
+  if (isAppQuitting) return;
+  isAppQuitting = true;
+
   console.log('👋 [SYSTEM SHUTDOWN] VoiceScribe kapatılıyor...');
   globalShortcut.unregisterAll();
+
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy();
   if (hudWindow && !hudWindow.isDestroyed()) hudWindow.destroy();
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+
+  // Do not call process.exit() — it aborts Electron's graceful shutdown and can
+  // break autoUpdater.quitAndInstall() / Squirrel restart on Windows.
   app.quit();
-  process.exit(0);
 }
 
 function openDashboardWithTab(tabName) {
   createDashboardWindow();
-  mainWindow.webContents.send('navigate-tab', tabName);
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const sendNav = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('navigate-tab', tabName);
+    }
+  };
+
+  // Avoid racing the renderer before it mounts the navigate listener
+  if (mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.once('did-finish-load', sendNav);
+  } else {
+    setImmediate(sendNav);
+  }
 }
 
 function toggleRecording() {
@@ -293,6 +342,8 @@ function toggleRecording() {
 
 function startRecording() {
   isRecording = true;
+  acceptNextAudioBuffer = true;
+  recordingStartedAt = Date.now();
   console.log(`\n🔴 [RECORDING STARTED] VoiceScribe ses kaydı başladı...`);
   if (hudWindow) {
     hudWindow.showInactive();
@@ -302,6 +353,7 @@ function startRecording() {
 
 function stopRecording() {
   isRecording = false;
+  // Keep acceptNextAudioBuffer=true so the HUD can still submit the finished clip.
   console.log(`⏹️  [RECORDING STOPPED] Ses kaydı tamamlandı. Transkripsiyon işleniyor...`);
   if (hudWindow) {
     hudWindow.webContents.send('recording-state-changed', { status: 'processing' });
@@ -310,7 +362,8 @@ function stopRecording() {
 
 function registerGlobalHotkeys() {
   globalShortcut.unregisterAll();
-  const hotkey = store.config.hotkey || 'CommandOrControl+Space';
+  const hotkey = store.config.hotkey || 'CommandOrControl+Shift+Space';
+  const status = { ok: false, hotkey, error: null };
 
   try {
     const ret = globalShortcut.register(hotkey, () => {
@@ -318,17 +371,31 @@ function registerGlobalHotkeys() {
       toggleRecording();
     });
     if (!ret) {
-      console.error(`❌ [HOTKEY ERROR] Kısayol kaydı başarısız: ${hotkey}`);
+      status.error = `Kısayol kaydı başarısız: ${hotkey}. Başka bir uygulama bu kombinasyonu kullanıyor olabilir (ör. Ctrl+Space → IME). Farklı bir kısayol seçin.`;
+      console.error(`❌ [HOTKEY ERROR] ${status.error}`);
     } else {
+      status.ok = true;
       console.log(`🎹 [HOTKEY REGISTERED] VoiceScribe kısayolu dinleniyor: ${hotkey}`);
+      if (hotkey === 'CommandOrControl+Space' || hotkey === 'Ctrl+Space') {
+        status.warning = 'Ctrl+Space bazı sistemlerde yazım dili (IME) ile çakışabilir. Sorun yaşarsan Ctrl+Shift+Space dene.';
+      }
     }
   } catch (e) {
+    status.error = e.message || 'Kısayol kaydı sırasında hata oluştu.';
     console.error('❌ [HOTKEY EXCEPTION]:', e);
   }
+
+  refreshTrayMenu();
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('hotkey-status', status);
+  }
+  return status;
 }
 
 app.whenReady().then(() => {
   console.log(`\n🚀 [SYSTEM STARTED] VoiceScribe Windows 11 Masaüstü Uygulaması Başlatıldı.`);
+  store.unlockSecrets();
   createSplashWindow();
   createHUDWindow();
   setupTray();
@@ -343,6 +410,12 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  // Keep running in the tray unless the user chose full quit.
+});
+
+app.on('before-quit', () => {
+  isAppQuitting = true;
+  globalShortcut.unregisterAll();
 });
 
 app.on('will-quit', () => {
@@ -354,9 +427,9 @@ ipcMain.on('pause-hotkey', () => {
   globalShortcut.unregisterAll();
 });
 
-ipcMain.on('resume-hotkey', () => {
+ipcMain.handle('resume-hotkey', () => {
   console.log(`▶️  [HOTKEY RESUMED] VoiceScribe kısayolu tekrar aktifleştirildi.`);
-  registerGlobalHotkeys();
+  return registerGlobalHotkeys();
 });
 
 ipcMain.on('minimize-window', () => {
@@ -408,8 +481,8 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 ipcMain.handle('get-config', () => store.config);
 ipcMain.handle('save-config', (event, config) => {
   const updated = store.saveConfig(config);
-  registerGlobalHotkeys();
-  return updated;
+  const hotkeyStatus = registerGlobalHotkeys();
+  return { config: updated, hotkeyStatus };
 });
 
 ipcMain.handle('get-history', () => store.history);
@@ -418,10 +491,88 @@ ipcMain.handle('delete-history-item', (event, id) => store.deleteHistoryItem(id)
 ipcMain.handle('clear-history', () => store.clearHistory());
 ipcMain.handle('execute-windows-action', (event, action) => windowsActions.executeCommand(action));
 
+ipcMain.handle('ask-ai', async (event, prompt) => {
+  const text = String(prompt || '').trim();
+  if (!text) return { success: false, error: 'Komut boş olamaz.' };
+
+  const result = await audioEngine.chatCompletion(
+    `Sen VoiceScribe masaüstü asistanısın. Kullanıcı Türkçe konuşur.
+İsteklerine göre e-posta taslağı, özet, madde listesi veya kısa yanıt üret.
+Net, kullanıma hazır metin yaz. Gereksiz giriş/çıkış cümleleri ekleme.`,
+    text,
+    { temperature: 0.5 }
+  );
+
+  if (result.success && result.text) {
+    clipboard.writeText(result.text);
+  }
+  return result;
+});
+
+ipcMain.handle('process-meeting-audio', async (event, arrayBuffer, meta = {}) => {
+  try {
+    if (!arrayBuffer) return { success: false, error: 'Ses verisi yok.' };
+
+    const tempDir = app.getPath('temp');
+    const audioPath = path.join(tempDir, `meeting_rec_${Date.now()}.webm`);
+    fs.writeFileSync(audioPath, Buffer.from(arrayBuffer));
+
+    console.log(`🎙️  [MEETING] Transkripsiyon başlıyor (${meta.durationSeconds || '?'} sn)...`);
+    const transcript = await audioEngine.transcribe(audioPath);
+    try { fs.unlinkSync(audioPath); } catch (e) {}
+
+    if (!transcript || !String(transcript).trim()) {
+      return { success: false, error: 'Toplantı sesinden metin çıkarılamadı.' };
+    }
+
+    const cleaned = await audioEngine.cleanText(transcript);
+    const transcriptText = cleaned || transcript;
+
+    let summary = '';
+    const summaryResult = await audioEngine.chatCompletion(
+      `Sen bir toplantı asistanısın. Verilen transkripti Türkçe özetle.
+Çıktı yapısı:
+1) Kısa özet (3-5 cümle)
+2) Madde madde kararlar / eylemler
+3) Varsa açık sorular
+Transkript yokmuş gibi uydurma.`,
+      transcriptText,
+      { temperature: 0.3 }
+    );
+
+    if (summaryResult.success) {
+      summary = summaryResult.text;
+    } else {
+      summary = `Özet üretilemedi: ${summaryResult.error || 'Bilinmeyen hata'}\n\n(Transkripsiyon yine de aşağıda.)`;
+    }
+
+    store.addHistoryItem({
+      rawText: transcript,
+      cleanText: summary ? `📋 Toplantı özeti\n\n${summary}` : transcriptText,
+      provider: store.config.sttProvider,
+      duration: typeof meta.durationSeconds === 'number'
+        ? `${String(Math.floor(meta.durationSeconds / 60)).padStart(2, '0')}:${String(Math.round(meta.durationSeconds % 60)).padStart(2, '0')}`
+        : '00:00'
+    });
+
+    return {
+      success: true,
+      transcript: transcriptText,
+      summary,
+      summaryError: summaryResult.success ? null : summaryResult.error
+    };
+  } catch (e) {
+    console.error('❌ [MEETING ERROR]', e);
+    return { success: false, error: e.message };
+  }
+});
+
 ipcMain.on('start-recording', () => startRecording());
 ipcMain.on('stop-recording', () => stopRecording());
 ipcMain.on('cancel-recording', () => {
   isRecording = false;
+  acceptNextAudioBuffer = false;
+  recordingStartedAt = null;
   console.log(`🚫 [RECORDING CANCELLED] Kayıt kullanıcı tarafından iptal edildi.`);
   if (hudWindow) hudWindow.hide();
 });
@@ -431,8 +582,16 @@ ipcMain.on('close-hud', () => {
   if (hudWindow) hudWindow.hide();
 });
 
-ipcMain.handle('process-audio-buffer', async (event, arrayBuffer) => {
+ipcMain.handle('process-audio-buffer', async (event, arrayBuffer, meta = {}) => {
   try {
+    if (!acceptNextAudioBuffer) {
+      console.log('🚫 [AUDIO DISCARDED] İptal edilmiş veya beklenmeyen ses tamponu yok sayıldı.');
+      return { success: false, reason: 'cancelled' };
+    }
+    acceptNextAudioBuffer = false;
+    const historyDuration = resolveHistoryDuration(meta);
+    recordingStartedAt = null;
+
     const tempDir = app.getPath('temp');
     const audioPath = path.join(tempDir, `dikte_rec_${Date.now()}.webm`);
     
@@ -455,20 +614,40 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer) => {
       return { success: false, reason: 'empty' };
     }
 
-    if (hudWindow) {
-      hudWindow.webContents.send('recording-state-changed', { status: 'cleaning' });
-    }
-    let cleanText = await audioEngine.cleanText(rawText);
-
-    // Check Windows Voice Actions
-    const actionResult = windowsActions.processText(cleanText, store.config);
+    // Prefer action match on raw/vocab text before slow AI cleanup
+    // (avoids cleanup rewriting triggers and reduces latency for voice commands).
+    const vocabText = audioEngine.applyVocabulary(rawText);
+    let actionResult = windowsActions.processText([vocabText, rawText], store.config);
     if (actionResult.handled) {
       console.log(`⚡ [ACTION EXECUTED] Sesli aksiyon çalıştırıldı, metin yapıştırma atlanıyor.`);
       store.addHistoryItem({
         rawText,
         cleanText: `⚡ Aksiyon: "${actionResult.action.trigger}" (${actionResult.action.command})`,
         provider: store.config.sttProvider,
-        duration: '00:02'
+        duration: historyDuration
+      });
+      if (hudWindow) {
+        hudWindow.webContents.send('recording-state-changed', { status: 'success', text: `⚡ Aksiyon: ${actionResult.action.trigger}` });
+        setTimeout(() => hudWindow.hide(), 1800);
+      }
+      try { fs.unlinkSync(audioPath); } catch (e) {}
+      return { success: true, actionHandled: true, action: actionResult.action };
+    }
+
+    if (hudWindow) {
+      hudWindow.webContents.send('recording-state-changed', { status: 'cleaning' });
+    }
+    let cleanText = await audioEngine.cleanText(rawText);
+
+    // Second chance: cleanup may repair a near-miss transcription
+    actionResult = windowsActions.processText(cleanText, store.config);
+    if (actionResult.handled) {
+      console.log(`⚡ [ACTION EXECUTED] Sesli aksiyon çalıştırıldı, metin yapıştırma atlanıyor.`);
+      store.addHistoryItem({
+        rawText,
+        cleanText: `⚡ Aksiyon: "${actionResult.action.trigger}" (${actionResult.action.command})`,
+        provider: store.config.sttProvider,
+        duration: historyDuration
       });
       if (hudWindow) {
         hudWindow.webContents.send('recording-state-changed', { status: 'success', text: `⚡ Aksiyon: ${actionResult.action.trigger}` });
@@ -493,7 +672,7 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer) => {
       rawText,
       cleanText,
       provider: store.config.sttProvider,
-      duration: '00:05'
+      duration: historyDuration
     });
 
     if (hudWindow) {

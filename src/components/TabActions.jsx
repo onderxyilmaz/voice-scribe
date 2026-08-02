@@ -1,22 +1,77 @@
 import React, { useState } from 'react';
 import { Terminal, Plus, Trash2, Check, Search, AlignLeft, Tag, Edit2, Save, X, Play, Monitor, Volume2, Cpu, ExternalLink } from 'lucide-react';
 
+const BUILTIN_OPTIONS = [
+  { id: 'volume_down', label: 'Sesi kıs' },
+  { id: 'volume_up', label: 'Sesi aç' },
+  { id: 'volume_mute', label: 'Sessize al' },
+  { id: 'lock_workstation', label: 'Bilgisayarı kilitle' }
+];
+
+function isSafeAppCommand(command) {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.exe$/i.test(String(command || '').trim());
+}
+
+function isSafeUrl(command) {
+  try {
+    const parsed = new URL(String(command || '').trim());
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function validateActionFields(type, command) {
+  const cmd = String(command || '').trim();
+  if (!cmd) return 'Komut boş olamaz.';
+  if (type === 'app' && !isSafeAppCommand(cmd)) {
+    return 'Uygulama için yalnızca tek bir .exe adı girin (örn. calc.exe). Yol veya ek argüman yok.';
+  }
+  if (type === 'url' && !isSafeUrl(cmd)) {
+    return 'URL http:// veya https:// ile başlamalı.';
+  }
+  if (type === 'builtin' && !BUILTIN_OPTIONS.some((o) => o.id === cmd)) {
+    return 'Geçerli bir sistem aksiyonu seçin.';
+  }
+  if (type === 'powershell' || type === 'cmd') {
+    return 'Serbest PowerShell/CMD güvenlik nedeniyle kapatıldı. Uygulama, URL veya Sistem aksiyonu kullanın.';
+  }
+  return '';
+}
+
+function parseAliasesInput(text) {
+  return String(text || '')
+    .split(',')
+    .map((s) => s.trim().toLocaleLowerCase('tr-TR'))
+    .filter(Boolean);
+}
+
+function aliasesToInput(aliases) {
+  if (!aliases) return '';
+  if (Array.isArray(aliases)) return aliases.join(', ');
+  return String(aliases);
+}
+
 export default function TabActions({ config, setConfig, saveConfig }) {
   const [trigger, setTrigger] = useState('');
+  const [aliases, setAliases] = useState('');
   const [command, setCommand] = useState('');
   const [actionType, setActionType] = useState('app');
   const [categories, setCategories] = useState(['Uygulama']);
   const [categoryInput, setCategoryInput] = useState('');
   const [search, setSearch] = useState('');
   const [testingId, setTestingId] = useState(null);
+  const [formError, setFormError] = useState('');
 
   // Edit State
   const [editingId, setEditingId] = useState(null);
   const [editTrigger, setEditTrigger] = useState('');
+  const [editAliases, setEditAliases] = useState('');
   const [editCommand, setEditCommand] = useState('');
   const [editActionType, setEditActionType] = useState('app');
   const [editCategories, setEditCategories] = useState([]);
   const [editCategoryInput, setEditCategoryInput] = useState('');
+  const [editError, setEditError] = useState('');
 
   const defaultActions = [
     {
@@ -39,8 +94,8 @@ export default function TabActions({ config, setConfig, saveConfig }) {
       id: 'default-browser',
       trigger: 'tarayıcıyı aç',
       categories: ['Uygulama', 'İnternet'],
-      actionType: 'app',
-      command: 'start https://www.google.com',
+      actionType: 'url',
+      command: 'https://www.google.com',
       enabled: true
     },
     {
@@ -63,32 +118,32 @@ export default function TabActions({ config, setConfig, saveConfig }) {
       id: 'default-voldown',
       trigger: 'sesi kıs',
       categories: ['Medya', 'Ses'],
-      actionType: 'powershell',
-      command: '(new-object -com wscript.shell).SendKeys([char]174)',
+      actionType: 'builtin',
+      command: 'volume_down',
       enabled: true
     },
     {
       id: 'default-volup',
       trigger: 'sesi aç',
       categories: ['Medya', 'Ses'],
-      actionType: 'powershell',
-      command: '(new-object -com wscript.shell).SendKeys([char]175)',
+      actionType: 'builtin',
+      command: 'volume_up',
       enabled: true
     },
     {
       id: 'default-volmute',
       trigger: 'sessize al',
       categories: ['Medya', 'Ses'],
-      actionType: 'powershell',
-      command: '(new-object -com wscript.shell).SendKeys([char]173)',
+      actionType: 'builtin',
+      command: 'volume_mute',
       enabled: true
     },
     {
       id: 'default-lock',
       trigger: 'bilgisayarı kilitle',
       categories: ['Sistem', 'Güvenlik'],
-      actionType: 'cmd',
-      command: 'rundll32.exe user32.dll,LockWorkStation',
+      actionType: 'builtin',
+      command: 'lock_workstation',
       enabled: true
     }
   ];
@@ -183,6 +238,12 @@ export default function TabActions({ config, setConfig, saveConfig }) {
 
   const handleAdd = () => {
     if (!trigger.trim() || !command.trim()) return;
+    const validationError = validateActionFields(actionType, command);
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+    setFormError('');
 
     let finalCategories = [...categories];
     if (categoryInput.trim()) {
@@ -196,6 +257,7 @@ export default function TabActions({ config, setConfig, saveConfig }) {
     const newAction = {
       id: Date.now().toString(),
       trigger: trigger.trim().toLowerCase(),
+      aliases: parseAliasesInput(aliases),
       command: command.trim(),
       actionType,
       categories: finalCategories,
@@ -208,6 +270,7 @@ export default function TabActions({ config, setConfig, saveConfig }) {
     saveConfig(updated);
 
     setTrigger('');
+    setAliases('');
     setCommand('');
     setActionType('app');
     setCategories(['Uygulama']);
@@ -230,16 +293,43 @@ export default function TabActions({ config, setConfig, saveConfig }) {
   };
 
   const handleStartEdit = (item) => {
+    let type = item.actionType || 'app';
+    let cmd = item.command || '';
+    const legacyBuiltin = {
+      '(new-object -com wscript.shell).SendKeys([char]174)': 'volume_down',
+      '(new-object -com wscript.shell).SendKeys([char]175)': 'volume_up',
+      '(new-object -com wscript.shell).SendKeys([char]173)': 'volume_mute',
+      'rundll32.exe user32.dll,LockWorkStation': 'lock_workstation'
+    };
+    if ((type === 'powershell' || type === 'cmd') && legacyBuiltin[cmd]) {
+      type = 'builtin';
+      cmd = legacyBuiltin[cmd];
+    } else if (type === 'app' && /^start\s+https?:\/\//i.test(cmd)) {
+      type = 'url';
+      cmd = cmd.replace(/^start\s+/i, '').trim();
+    } else if (type === 'powershell' || type === 'cmd') {
+      type = 'app';
+      cmd = '';
+    }
+
     setEditingId(item.id);
     setEditTrigger(item.trigger);
-    setEditCommand(item.command);
-    setEditActionType(item.actionType || 'app');
+    setEditAliases(aliasesToInput(item.aliases));
+    setEditCommand(cmd);
+    setEditActionType(type);
     setEditCategories(getItemCategories(item));
     setEditCategoryInput('');
+    setEditError('');
   };
 
   const handleSaveEdit = (id) => {
     if (!editTrigger.trim() || !editCommand.trim()) return;
+    const validationError = validateActionFields(editActionType, editCommand);
+    if (validationError) {
+      setEditError(validationError);
+      return;
+    }
+    setEditError('');
 
     let finalCategories = [...editCategories];
     if (editCategoryInput.trim()) {
@@ -255,6 +345,7 @@ export default function TabActions({ config, setConfig, saveConfig }) {
         return {
           ...item,
           trigger: editTrigger.trim().toLowerCase(),
+          aliases: parseAliasesInput(editAliases),
           command: editCommand.trim(),
           actionType: editActionType,
           categories: finalCategories
@@ -266,6 +357,35 @@ export default function TabActions({ config, setConfig, saveConfig }) {
     setConfig(updated);
     saveConfig(updated);
     setEditingId(null);
+  };
+
+  const renderCommandInput = (type, value, onChange, selectClass, inputClass) => {
+    if (type === 'builtin') {
+      return (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={selectClass}
+          style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+        >
+          <option value="">Sistem aksiyonu seçin...</option>
+          {BUILTIN_OPTIONS.map((opt) => (
+            <option key={opt.id} value={opt.id}>{opt.label}</option>
+          ))}
+        </select>
+      );
+    }
+    return (
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={type === 'url' ? 'https://example.com' : 'calc.exe'}
+        className={inputClass}
+        style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+        autoComplete="off"
+      />
+    );
   };
 
   const handleCancelEdit = () => {
@@ -326,7 +446,7 @@ export default function TabActions({ config, setConfig, saveConfig }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">Yeni Sesli Windows Aksiyonu Ekle</h3>
-            <p className="text-xs text-gray-400">Söylenecek komut kelimesini ve çalıştırılacak Windows aksiyonunu veya program komutunu tanımlayın.</p>
+            <p className="text-xs text-gray-400">Söylenecek komutu ve güvenli aksiyon tipini tanımlayın. Serbest PowerShell/CMD kapalıdır.</p>
           </div>
         </div>
 
@@ -341,6 +461,18 @@ export default function TabActions({ config, setConfig, saveConfig }) {
                 onChange={(e) => setTrigger(e.target.value)}
                 className="w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
                 style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+                autoFocus
+                autoComplete="off"
+              />
+              <label className="text-[11px] text-gray-400 mb-1 mt-2 block font-medium">Alternatif söylenişler (virgülle, isteğe bağlı)</label>
+              <input
+                type="text"
+                placeholder="Örn: not defterim, notepad"
+                value={aliases}
+                onChange={(e) => setAliases(e.target.value)}
+                className="w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+                autoComplete="off"
               />
             </div>
 
@@ -382,28 +514,40 @@ export default function TabActions({ config, setConfig, saveConfig }) {
               <label className="text-[11px] text-gray-400 mb-1 block font-medium">Aksiyon Tipi</label>
               <select
                 value={actionType}
-                onChange={(e) => setActionType(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setActionType(next);
+                  setFormError('');
+                  if (next === 'builtin') setCommand('volume_down');
+                  else if (next === 'url') setCommand('https://');
+                  else setCommand('');
+                }}
                 className="w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
                 style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
               >
-                <option value="app">Uygulama / Exe Çalıştır (App)</option>
-                <option value="powershell">PowerShell Komutu</option>
-                <option value="cmd">Windows CMD / Shell Komutu</option>
+                <option value="app">Uygulama (.exe)</option>
+                <option value="url">URL (http/https)</option>
+                <option value="builtin">Sistem (ses / kilit)</option>
               </select>
             </div>
 
             <div className="md:col-span-2">
-              <label className="text-[11px] text-gray-400 mb-1 block font-medium">Çalıştırılacak Komut / Dosya Yolu (Command)</label>
-              <input
-                type="text"
-                placeholder="Örn: calc.exe veya start https://google.com"
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                className="w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
-                style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
-              />
+              <label className="text-[11px] text-gray-400 mb-1 block font-medium">
+                {actionType === 'url' ? 'URL' : actionType === 'builtin' ? 'Sistem Aksiyonu' : 'Exe Adı'}
+              </label>
+              {renderCommandInput(
+                actionType,
+                command,
+                (v) => { setCommand(v); setFormError(''); },
+                'w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500',
+                'w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono'
+              )}
             </div>
           </div>
+
+          {formError && (
+            <p className="text-xs text-red-400">{formError}</p>
+          )}
 
           <button
             onClick={handleAdd}
@@ -464,6 +608,17 @@ export default function TabActions({ config, setConfig, saveConfig }) {
                             onChange={(e) => setEditTrigger(e.target.value)}
                             className="w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono"
                             style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+                            autoComplete="off"
+                          />
+                          <label className="text-[10px] text-gray-400 mb-1 mt-2 block font-medium">Alternatifler (virgülle)</label>
+                          <input
+                            type="text"
+                            value={editAliases}
+                            onChange={(e) => setEditAliases(e.target.value)}
+                            placeholder="not defterim, notepad"
+                            className="w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono"
+                            style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+                            autoComplete="off"
                           />
                         </div>
                         <div>
@@ -502,26 +657,39 @@ export default function TabActions({ config, setConfig, saveConfig }) {
                           <label className="text-[10px] text-gray-400 mb-1 block font-medium">Aksiyon Tipi</label>
                           <select
                             value={editActionType}
-                            onChange={(e) => setEditActionType(e.target.value)}
+                            onChange={(e) => {
+                              const next = e.target.value;
+                              setEditActionType(next);
+                              setEditError('');
+                              if (next === 'builtin') setEditCommand('volume_down');
+                              else if (next === 'url') setEditCommand('https://');
+                              else setEditCommand('');
+                            }}
                             className="w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
                             style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
                           >
-                            <option value="app">Uygulama / Exe</option>
-                            <option value="powershell">PowerShell</option>
-                            <option value="cmd">Windows CMD</option>
+                            <option value="app">Uygulama (.exe)</option>
+                            <option value="url">URL (http/https)</option>
+                            <option value="builtin">Sistem (ses / kilit)</option>
                           </select>
                         </div>
                         <div className="md:col-span-2">
-                          <label className="text-[10px] text-gray-400 mb-1 block font-medium">Komut / Dosya Yolu</label>
-                          <input
-                            type="text"
-                            value={editCommand}
-                            onChange={(e) => setEditCommand(e.target.value)}
-                            className="w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono"
-                            style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
-                          />
+                          <label className="text-[10px] text-gray-400 mb-1 block font-medium">
+                            {editActionType === 'url' ? 'URL' : editActionType === 'builtin' ? 'Sistem Aksiyonu' : 'Exe Adı'}
+                          </label>
+                          {renderCommandInput(
+                            editActionType,
+                            editCommand,
+                            (v) => { setEditCommand(v); setEditError(''); },
+                            'w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none',
+                            'w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none font-mono'
+                          )}
                         </div>
                       </div>
+
+                      {editError && (
+                        <p className="text-xs text-red-400">{editError}</p>
+                      )}
 
                       <div className="flex items-center justify-end gap-2 pt-1">
                         <button

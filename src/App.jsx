@@ -31,10 +31,25 @@ export default function App() {
     }
   }, []);
 
-  const saveConfig = (newConfig) => {
-    if (window.api) {
-      window.api.saveConfig(newConfig);
+  useEffect(() => {
+    if (!window.api?.onNavigateTab) return undefined;
+    return window.api.onNavigateTab((tab) => {
+      if (!tab) return;
+      setView('dashboard');
+      setActiveTab(tab);
+    });
+  }, []);
+
+  const saveConfig = async (newConfig) => {
+    if (!window.api?.saveConfig) return { config: newConfig, hotkeyStatus: null };
+    const result = await window.api.saveConfig(newConfig);
+    // Support structured { config, hotkeyStatus } and legacy plain config object
+    if (result && result.config) {
+      setConfig(result.config);
+      return result;
     }
+    if (result) setConfig(result);
+    return { config: result || newConfig, hotkeyStatus: null };
   };
 
   const handleMinimize = () => {

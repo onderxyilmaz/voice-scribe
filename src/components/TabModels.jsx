@@ -1,5 +1,5 @@
-import React from 'react';
-import { Cpu, HardDrive, Cloud, Key, CheckCircle } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { HardDrive, Cloud, Key, CheckCircle } from 'lucide-react';
 
 export default function TabModels({ config, setConfig, saveConfig }) {
   const handleChange = (key, value) => {
@@ -8,12 +8,23 @@ export default function TabModels({ config, setConfig, saveConfig }) {
     saveConfig(updated);
   };
 
+  useEffect(() => {
+    if (config.sttProvider === 'openrouter') {
+      handleChange('sttProvider', 'local_whisper');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.sttProvider]);
+
   const providers = [
-    { id: 'local_whisper', name: 'Yerel Whisper (Offline / 100% Çevrimdışı)', desc: 'Cihazınızın işlemcisinde çalışır. İnternet gerektirmez, %100 gizlidir ve tamamen ücretsizdir.', icon: HardDrive, tag: 'Önerilen (Gizli)' },
+    { id: 'local_whisper', name: 'Yerel Whisper (Offline / 100% Çevrimdışı)', desc: 'Kurulumla gelen gömülü Python motorunda çalışır. İnternet gerektirmez, %100 gizlidir ve tamamen ücretsizdir.', icon: HardDrive, tag: 'Önerilen (Gizli)' },
     { id: 'groq', name: 'Groq Cloud Whisper', desc: 'Ultra hızlı (100x daha hızlı). Groq LPU altyapısında Whisper-Large-v3-Turbo kullanır.', icon: Cloud, tag: 'Ultra Hızlı' },
-    { id: 'openai', name: 'OpenAI Whisper API', desc: 'OpenAI resmi Whisper-1 modeli.', icon: Cloud, tag: 'Standart' },
-    { id: 'openrouter', name: 'OpenRouter Audio', desc: 'Esnek OpenRouter sağlayıcısı üzerinden transkripsiyon.', icon: Cloud, tag: 'Esnek' }
+    { id: 'openai', name: 'OpenAI Whisper API', desc: 'OpenAI resmi Whisper-1 modeli.', icon: Cloud, tag: 'Standart' }
   ];
+
+  // Migrate removed OpenRouter STT selection to local Whisper
+  const selectedProvider = config.sttProvider === 'openrouter'
+    ? 'local_whisper'
+    : (config.sttProvider || 'local_whisper');
 
   return (
     <div className="space-y-6">
@@ -26,7 +37,7 @@ export default function TabModels({ config, setConfig, saveConfig }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {providers.map((p) => {
           const Icon = p.icon;
-          const isSelected = (config.sttProvider || 'local_whisper') === p.id;
+          const isSelected = selectedProvider === p.id;
           return (
             <div
               key={p.id}
@@ -58,7 +69,7 @@ export default function TabModels({ config, setConfig, saveConfig }) {
       </div>
 
       {/* Local Whisper Configuration */}
-      {config.sttProvider === 'local_whisper' && (
+      {selectedProvider === 'local_whisper' && (
         <div className="glass-card p-5 space-y-4 border-indigo-500/30">
           <div className="flex items-center gap-3">
             <HardDrive className="w-5 h-5 text-indigo-400" />
@@ -98,7 +109,7 @@ export default function TabModels({ config, setConfig, saveConfig }) {
           <Key className="w-5 h-5 text-amber-400" />
           <div>
             <h3 className="text-sm font-semibold text-white">Bulut API Anahtarları</h3>
-            <p className="text-xs text-gray-400">Bulut sağlayıcılarını kullanmak için anahtarınızı girin. Bilgiler yerel cihazınızda saklanır.</p>
+            <p className="text-xs text-gray-400">Anahtarlar bu cihazda OS şifrelemesi (Electron safeStorage) ile saklanır; config.json içinde düz metin tutulmaz.</p>
           </div>
         </div>
 
@@ -126,14 +137,16 @@ export default function TabModels({ config, setConfig, saveConfig }) {
           </div>
 
           <div>
-            <label className="text-xs text-gray-300 font-medium block mb-1">OpenRouter API Key (Metin Temizleme için)</label>
+            <label className="text-xs text-gray-300 font-medium block mb-1">OpenRouter API Key (yalnızca AI Metin Temizleme)</label>
             <input
               type="password"
               placeholder="sk-or-v1-..."
               value={config.openrouterApiKey || ''}
               onChange={(e) => handleChange('openrouterApiKey', e.target.value)}
+              autoComplete="off"
               className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
             />
+            <p className="text-[10px] text-gray-500 mt-1">OpenRouter STT/transkripsiyon için kullanılmaz; sadece Metin Temizleme sekmesindeki LLM için.</p>
           </div>
         </div>
       </div>

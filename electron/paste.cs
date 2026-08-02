@@ -10,8 +10,9 @@ public class FastPaste {
         // Give 80ms for physical key release
         Thread.Sleep(80);
 
-        // Ensure Control and Space keys are released from OS queue
+        // Ensure hotkey modifiers are released from OS queue
         keybd_event(0x11, 0, 2, UIntPtr.Zero); // VK_CONTROL up
+        keybd_event(0x10, 0, 2, UIntPtr.Zero); // VK_SHIFT up
         keybd_event(0x20, 0, 2, UIntPtr.Zero); // VK_SPACE up
 
         Thread.Sleep(20);

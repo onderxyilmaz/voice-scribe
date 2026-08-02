@@ -9,11 +9,26 @@ export default function FloatingHUD() {
   const audioChunksRef = useRef([]);
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const discardRecordingRef = useRef(false);
+  const mediaStreamRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const stopBeepPlayedRef = useRef(false);
+  const durationRef = useRef(0);
 
-  // Play light, pleasant Web Audio API chimes
-  const playBeep = (type) => {
+  const getAudioCtx = async () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtxRef.current.state === 'suspended') {
+      await audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  };
+
+  // Play light, pleasant Web Audio API chimes (shared resumed context = no delayed beeps)
+  const playBeep = async (type) => {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = await getAudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -23,7 +38,6 @@ export default function FloatingHUD() {
       const now = ctx.currentTime;
 
       if (type === 'start') {
-        // Soft ascending chime
         osc.type = 'sine';
         osc.frequency.setValueAtTime(520, now);
         osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
@@ -32,7 +46,6 @@ export default function FloatingHUD() {
         osc.start(now);
         osc.stop(now + 0.08);
       } else if (type === 'stop') {
-        // Soft descending tone
         osc.type = 'sine';
         osc.frequency.setValueAtTime(880, now);
         osc.frequency.exponentialRampToValueAtTime(440, now + 0.07);
@@ -41,7 +54,6 @@ export default function FloatingHUD() {
         osc.start(now);
         osc.stop(now + 0.07);
       } else if (type === 'success') {
-        // Pleasant success pop
         osc.type = 'sine';
         osc.frequency.setValueAtTime(600, now);
         osc.frequency.exponentialRampToValueAtTime(1200, now + 0.12);
@@ -59,9 +71,14 @@ export default function FloatingHUD() {
     let timer;
     if (status === 'recording') {
       setDuration(0);
-      playBeep('start'); // Play start chime only when user starts recording
+      stopBeepPlayedRef.current = false;
+      durationRef.current = 0;
       timer = setInterval(() => {
-        setDuration(prev => prev + 1);
+        setDuration(prev => {
+          const next = prev + 1;
+          durationRef.current = next;
+          return next;
+        });
       }, 1000);
 
       startAudioCapture();
@@ -75,10 +92,13 @@ export default function FloatingHUD() {
     if (window.api) {
       const unsub = window.api.onRecordingStateChanged((data) => {
         if (data.status === 'processing') {
-          playBeep('stop'); // Play stop chime
+          if (!stopBeepPlayedRef.current) {
+            stopBeepPlayedRef.current = true;
+            playBeep('stop');
+          }
           stopAudioCapture();
         } else if (data.status === 'success') {
-          playBeep('success'); // Play success chime
+          playBeep('success');
         }
         setStatus(data.status);
         if (data.text) setCleanText(data.text);
@@ -89,7 +109,9 @@ export default function FloatingHUD() {
 
   const startAudioCapture = async () => {
     try {
+      discardRecordingRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
       audioChunksRef.current = [];
       
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -102,20 +124,34 @@ export default function FloatingHUD() {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const buffer = await audioBlob.arrayBuffer();
-        
-        if (window.api && buffer.byteLength > 0) {
-          window.api.sendAudioBuffer(buffer);
+        try {
+          if (discardRecordingRef.current) {
+            audioChunksRef.current = [];
+            return;
+          }
+
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const buffer = await audioBlob.arrayBuffer();
+
+          if (window.api && buffer.byteLength > 0) {
+            window.api.sendAudioBuffer(buffer, {
+              durationSeconds: durationRef.current
+            });
+          }
+        } finally {
+          stream.getTracks().forEach(track => track.stop());
+          if (mediaStreamRef.current === stream) {
+            mediaStreamRef.current = null;
+          }
         }
-        
-        stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
+      // Unlock/resume audio after mic access, then play start chime immediately
+      playBeep('start');
 
       // Audio Visualizer
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioContext = await getAudioCtx();
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
@@ -169,8 +205,21 @@ export default function FloatingHUD() {
   };
 
   const handleCancel = () => {
-    stopAudioCapture();
+    // Reject any late buffer in main first, then discard locally.
+    discardRecordingRef.current = true;
+    audioChunksRef.current = [];
+    if (!stopBeepPlayedRef.current) {
+      stopBeepPlayedRef.current = true;
+      playBeep('stop');
+    }
     if (window.api) window.api.cancelRecording();
+    stopAudioCapture();
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    setStatus('idle');
+    setCleanText('');
   };
 
   const formatTime = (secs) => {
@@ -215,7 +264,7 @@ export default function FloatingHUD() {
           </div>
           
           <div className="text-[10px] text-gray-400 font-mono">
-            {status === 'recording' ? formatTime(duration) : (cleanText ? `"${cleanText.substring(0, 20)}..."` : 'Ctrl+Space ile başlatın')}
+            {status === 'recording' ? formatTime(duration) : (cleanText ? `"${cleanText.substring(0, 20)}..."` : 'Kısayol ile başlatın')}
           </div>
         </div>
 

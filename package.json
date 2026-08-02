@@ -1,14 +1,17 @@
 {
   "name": "voicescribe",
-  "version": "1.0.8",
+  "version": "1.0.11",
   "description": "VoiceScribe — Windows 11 için Akıllı ve Fluent Tasarımlı Sesli Dikte (Voice-to-Text) Uygulaması",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "electron:dev": "concurrently -k \"vite\" \"electron .\"",
+    "electron:dev": "concurrently -k \"vite\" \"cmd /c node python\\wait_for_vite.js && electron .\"",
     "start": "electron .",
-    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& vite build && electron-builder --win --dir && node python/stamp_icon.js && node python/write_app_update_yml.js && electron-builder --win nsis portable --prepackaged release-1.0.8/win-unpacked"
+    "prepare:python": "node python/prepare_python_runtime.js",
+    "build:paste": "node python/build_paste.js",
+    "dist:win": "node python/dist_win.js",
+    "dist:win:unsigned": "set VOICESCRIBE_FORCE_UNSIGNED=1&& node python/dist_win.js"
   },
   "build": {
     "appId": "com.voicescribe.app",
@@ -19,12 +22,41 @@
       "repo": "voice-scribe"
     },
     "directories": {
-      "output": "release-1.0.8"
+      "output": "release"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "python/**/*"
+      "python/**/*",
+      "!python/prepare_python_runtime.js",
+      "!python/package_nsis.js",
+      "!python/stamp_icon.js",
+      "!python/write_app_update_yml.js",
+      "!python/clean_release_dir.js",
+      "!python/wait_for_vite.js",
+      "!python/build_paste.js",
+      "!python/dist_win.js"
+    ],
+    "asarUnpack": [
+      "electron/paste.exe",
+      "electron/paste.ps1"
+    ],
+    "extraResources": [
+      {
+        "from": "python/local_whisper_engine.py",
+        "to": "python/local_whisper_engine.py"
+      },
+      {
+        "from": "python/analyze_audio.py",
+        "to": "python/analyze_audio.py"
+      },
+      {
+        "from": "python-runtime",
+        "to": "python-runtime",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "win": {
       "target": [
@@ -32,7 +64,10 @@
         "portable"
       ],
       "icon": "electron/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true,
+      "publisherName": [
+        "Önder Yılmaz"
+      ]
     },
     "nsis": {
       "oneClick": false,

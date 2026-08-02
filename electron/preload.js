@@ -17,7 +17,12 @@ contextBridge.exposeInMainWorld('api', {
   cancelRecording: () => ipcRenderer.send('cancel-recording'),
 
   pauseHotkey: () => ipcRenderer.send('pause-hotkey'),
-  resumeHotkey: () => ipcRenderer.send('resume-hotkey'),
+  resumeHotkey: () => ipcRenderer.invoke('resume-hotkey'),
+  onHotkeyStatus: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('hotkey-status', handler);
+    return () => ipcRenderer.removeListener('hotkey-status', handler);
+  },
 
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   closeWindow: () => ipcRenderer.send('close-window'),
@@ -25,7 +30,9 @@ contextBridge.exposeInMainWorld('api', {
   openDashboard: () => ipcRenderer.send('open-dashboard'),
   closeHUD: () => ipcRenderer.send('close-hud'),
 
-  sendAudioBuffer: (buffer) => ipcRenderer.invoke('process-audio-buffer', buffer),
+  sendAudioBuffer: (buffer, meta) => ipcRenderer.invoke('process-audio-buffer', buffer, meta || {}),
+  askAi: (prompt) => ipcRenderer.invoke('ask-ai', prompt),
+  processMeetingAudio: (buffer, meta) => ipcRenderer.invoke('process-meeting-audio', buffer, meta || {}),
 
   // Auto-Updater API
   checkForUpdates: () => ipcRenderer.send('check-for-updates'),
