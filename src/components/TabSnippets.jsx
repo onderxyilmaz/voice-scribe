@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Zap, Plus, Trash2, Copy, Check, Search, AlignLeft, Tag, Edit2, Save, X } from 'lucide-react';
 
-export default function TabSnippets({ config, setConfig, saveConfig }) {
+export default function TabSnippets({ config, setConfig, saveConfig, embedded = false }) {
   const [trigger, setTrigger] = useState('');
   const [expansion, setExpansion] = useState('');
   const [categories, setCategories] = useState(['Genel']);
@@ -200,10 +200,12 @@ export default function TabSnippets({ config, setConfig, saveConfig }) {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
       <div>
-        <h2 className="text-xl font-bold text-white mb-1">Metin Kısayolları & Şablonlar (Voice Snippets)</h2>
-        <p className="text-xs text-gray-400">Sesli dikte sırasında belirlediğiniz tetikleyici kelimeleri otomatik olarak uzun metinlere dönüştürün.</p>
+        <h2 className="text-xl font-bold text-white mb-1">Metin Kısayolları</h2>
+        <p className="text-xs text-gray-400">Söylenen ifadeyi uzun şablona genişlet.</p>
       </div>
+      )}
 
       {/* Enable Toggle Card */}
       <div className="glass-card p-5 space-y-3">

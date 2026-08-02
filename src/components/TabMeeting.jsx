@@ -171,10 +171,9 @@ export default function TabMeeting() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-white mb-1">Toplantı & Yapay Zeka Stüdyosu</h2>
+        <h2 className="text-xl font-bold text-white mb-1">Toplantı & AI</h2>
         <p className="text-xs text-gray-400">
-          Mikrofonla toplantı kaydı alıp transkript/özet üretin veya yazılı komutla AI asistanını kullanın.
-          Özet ve asistan için API &amp; Modeller sekmesinde bir anahtar gerekir.
+          Mikrofon kaydı → transkript/özet; yazılı komutla asistan. Özet için API anahtarı gerekir.
         </p>
       </div>
 
@@ -273,7 +272,7 @@ export default function TabMeeting() {
 
       <div className="glass-card p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-purple-600/20 text-purple-400">
+          <div className="p-3 rounded-xl theme-accent-muted theme-accent-color">
             <Bot className="w-6 h-6" />
           </div>
           <div>
@@ -302,7 +301,7 @@ export default function TabMeeting() {
             type="button"
             onClick={handleAskAi}
             disabled={loadingAi || !askAiPrompt.trim()}
-            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             {loadingAi ? <Sparkles className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Gönder
           </button>

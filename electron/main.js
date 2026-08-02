@@ -22,6 +22,52 @@ let acceptNextAudioBuffer = false;
 let isAppQuitting = false;
 /** Epoch ms when current dictation recording started (for history duration). */
 let recordingStartedAt = null;
+/** Prevents concurrent process-audio-buffer handlers from both launching apps. */
+let isProcessingAudio = false;
+/** Dedupe rapid duplicate voice actions (same command). */
+let lastVoiceActionKey = '';
+let lastVoiceActionAt = 0;
+/** Short recordings prefer voice-action matching over dictation paste. */
+const COMMAND_MODE_MAX_SEC = 2.5;
+
+function formatActionHudMessage(action, execResult, deduped) {
+  const trigger = action?.trigger || action?.command || 'Aksiyon';
+  if (deduped) return `Zaten çalıştı: ${trigger}`;
+  if (execResult?.outcome === 'focused' || execResult?.activated) {
+    return `${trigger} öne getirildi`;
+  }
+  if (execResult?.outcome === 'timeout') return `${trigger} gönderildi`;
+  if (action?.actionType === 'builtin') return `${trigger} uygulandı`;
+  if (action?.actionType === 'url') return `${trigger} açıldı`;
+  return `${trigger} açıldı`;
+}
+
+function formatActionHistoryText(action, execResult, deduped) {
+  const trigger = action?.trigger || '?';
+  const command = action?.command || '';
+  if (deduped) return `⚡ Aksiyon (tekrar yok sayıldı): "${trigger}"`;
+  if (execResult?.outcome === 'focused' || execResult?.activated) {
+    return `⚡ Aksiyon (öne getirildi): "${trigger}" (${command})`;
+  }
+  return `⚡ Aksiyon: "${trigger}" (${command})`;
+}
+
+async function runActionWithTimeout(action, timeoutMs = 5000) {
+  let timer;
+  try {
+    return await Promise.race([
+      windowsActions.executeCommand(action),
+      new Promise((resolve) => {
+        timer = setTimeout(() => {
+          console.warn(`⏱️  [ACTION TIMEOUT] Aksiyon ${timeoutMs}ms içinde bitmedi — devam ediliyor.`);
+          resolve({ success: true, activated: false, outcome: 'timeout' });
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function formatRecordingDuration(totalSeconds) {
   const secs = Math.max(0, Math.round(Number(totalSeconds) || 0));
@@ -341,6 +387,23 @@ function toggleRecording() {
 }
 
 function startRecording() {
+  if (isProcessingAudio) {
+    console.log('⏳ [BUSY] Önceki dikte/aksiyon bitmeden yeni kayıt başlamadı.');
+    if (hudWindow && !hudWindow.isDestroyed()) {
+      hudWindow.showInactive();
+      hudWindow.webContents.send('recording-state-changed', {
+        status: 'busy',
+        text: 'Önceki işlem bitiyor…'
+      });
+      setTimeout(() => {
+        if (hudWindow && !hudWindow.isDestroyed() && !isRecording && !isProcessingAudio) {
+          hudWindow.hide();
+        }
+      }, 1600);
+    }
+    return;
+  }
+
   isRecording = true;
   acceptNextAudioBuffer = true;
   recordingStartedAt = Date.now();
@@ -570,6 +633,13 @@ Transkript yokmuş gibi uydurma.`,
 ipcMain.on('start-recording', () => startRecording());
 ipcMain.on('stop-recording', () => stopRecording());
 ipcMain.on('cancel-recording', () => {
+  // Only abort an in-progress capture. If STT/action is already running,
+  // just hide the HUD — cancelling mid-process caused confusing "busy" discards.
+  if (isProcessingAudio) {
+    console.log('ℹ️  [HUD HIDDEN] İşlem sürerken iptal: yalnızca arayüz gizlendi, işlem devam ediyor.');
+    if (hudWindow) hudWindow.hide();
+    return;
+  }
   isRecording = false;
   acceptNextAudioBuffer = false;
   recordingStartedAt = null;
@@ -588,9 +658,23 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer, meta = {}) => 
       console.log('🚫 [AUDIO DISCARDED] İptal edilmiş veya beklenmeyen ses tamponu yok sayıldı.');
       return { success: false, reason: 'cancelled' };
     }
+    if (isProcessingAudio) {
+      console.log('🚫 [AUDIO DISCARDED] Önceki ses hâlâ işleniyor — çift tetikleme engellendi.');
+      if (hudWindow && !hudWindow.isDestroyed()) {
+        hudWindow.webContents.send('recording-state-changed', {
+          status: 'busy',
+          text: 'Önceki işlem bitiyor…'
+        });
+      }
+      return { success: false, reason: 'busy' };
+    }
     acceptNextAudioBuffer = false;
+    isProcessingAudio = true;
     const historyDuration = resolveHistoryDuration(meta);
     recordingStartedAt = null;
+    const durationSec = Number(meta?.durationSeconds);
+    const isCommandMode =
+      Number.isFinite(durationSec) && durationSec > 0 && durationSec <= COMMAND_MODE_MAX_SEC;
 
     const tempDir = app.getPath('temp');
     const audioPath = path.join(tempDir, `dikte_rec_${Date.now()}.webm`);
@@ -604,9 +688,12 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer, meta = {}) => 
     }
 
     if (hudWindow) {
-      hudWindow.webContents.send('recording-state-changed', { status: 'transcribing' });
+      hudWindow.webContents.send('recording-state-changed', {
+        status: 'transcribing',
+        text: isCommandMode ? 'Komut dinleniyor…' : undefined
+      });
     }
-    const rawText = await audioEngine.transcribe(audioPath);
+    const rawText = audioEngine.sanitizeTranscript(await audioEngine.transcribe(audioPath));
 
     if (!rawText || rawText.trim() === '') {
       console.log(`⚠️  [TRANSCRIPTION EMPTY] Konuşma algılanamadı veya metne çevrilemedi.`);
@@ -614,24 +701,67 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer, meta = {}) => 
       return { success: false, reason: 'empty' };
     }
 
-    // Prefer action match on raw/vocab text before slow AI cleanup
-    // (avoids cleanup rewriting triggers and reduces latency for voice commands).
-    const vocabText = audioEngine.applyVocabulary(rawText);
-    let actionResult = windowsActions.processText([vocabText, rawText], store.config);
-    if (actionResult.handled) {
-      console.log(`⚡ [ACTION EXECUTED] Sesli aksiyon çalıştırıldı, metin yapıştırma atlanıyor.`);
+    if (isCommandMode) {
+      console.log(`🎯 [COMMAND MODE] Kısa kayıt (${durationSec.toFixed(1)}s) — aksiyon öncelikli.`);
+    }
+
+    const finishAction = async (actionResult) => {
+      const actionKey = `${actionResult.action?.actionType || ''}:${actionResult.action?.command || ''}`;
+      const now = Date.now();
+      const deduped = Boolean(actionKey && actionKey === lastVoiceActionKey && (now - lastVoiceActionAt) < 2500);
+      let execResult = { success: true, outcome: 'deduped' };
+
+      if (deduped) {
+        console.log(`⏭️  [ACTION DEDUPED] Aynı aksiyon 2.5 sn içinde tekrarlandı: ${actionKey}`);
+      } else {
+        lastVoiceActionKey = actionKey;
+        lastVoiceActionAt = now;
+        execResult = await runActionWithTimeout(actionResult.action);
+        console.log(`⚡ [ACTION EXECUTED] Sesli aksiyon tamamlandı.`);
+      }
+
+      const hudText = formatActionHudMessage(actionResult.action, execResult, deduped);
       store.addHistoryItem({
         rawText,
-        cleanText: `⚡ Aksiyon: "${actionResult.action.trigger}" (${actionResult.action.command})`,
+        cleanText: formatActionHistoryText(actionResult.action, execResult, deduped),
         provider: store.config.sttProvider,
-        duration: historyDuration
+        duration: historyDuration,
+        mode: 'action'
       });
       if (hudWindow) {
-        hudWindow.webContents.send('recording-state-changed', { status: 'success', text: `⚡ Aksiyon: ${actionResult.action.trigger}` });
+        hudWindow.webContents.send('recording-state-changed', { status: 'success', text: hudText });
         setTimeout(() => hudWindow.hide(), 1800);
       }
       try { fs.unlinkSync(audioPath); } catch (e) {}
-      return { success: true, actionHandled: true, action: actionResult.action };
+      return { success: true, actionHandled: true, action: actionResult.action, outcome: execResult.outcome };
+    };
+
+    // Prefer action match on raw/vocab text before slow AI cleanup
+    const vocabText = audioEngine.applyVocabulary(rawText);
+    let actionResult = windowsActions.processText([vocabText, rawText], store.config);
+    if (actionResult.handled) {
+      return await finishAction(actionResult);
+    }
+
+    // Short command clips: do not paste near-miss STT as dictation
+    if (isCommandMode) {
+      console.log(`🎯 [COMMAND MODE] Aksiyon eşleşmedi — yapıştırma atlandı: "${rawText}"`);
+      store.addHistoryItem({
+        rawText,
+        cleanText: `🎯 Komut eşleşmedi: "${rawText}"`,
+        provider: store.config.sttProvider,
+        duration: historyDuration,
+        mode: 'command_miss'
+      });
+      if (hudWindow) {
+        hudWindow.webContents.send('recording-state-changed', {
+          status: 'error',
+          text: 'Komut eşleşmedi'
+        });
+        setTimeout(() => hudWindow.hide(), 1800);
+      }
+      try { fs.unlinkSync(audioPath); } catch (e) {}
+      return { success: false, reason: 'command_miss', text: rawText };
     }
 
     if (hudWindow) {
@@ -642,19 +772,7 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer, meta = {}) => 
     // Second chance: cleanup may repair a near-miss transcription
     actionResult = windowsActions.processText(cleanText, store.config);
     if (actionResult.handled) {
-      console.log(`⚡ [ACTION EXECUTED] Sesli aksiyon çalıştırıldı, metin yapıştırma atlanıyor.`);
-      store.addHistoryItem({
-        rawText,
-        cleanText: `⚡ Aksiyon: "${actionResult.action.trigger}" (${actionResult.action.command})`,
-        provider: store.config.sttProvider,
-        duration: historyDuration
-      });
-      if (hudWindow) {
-        hudWindow.webContents.send('recording-state-changed', { status: 'success', text: `⚡ Aksiyon: ${actionResult.action.trigger}` });
-        setTimeout(() => hudWindow.hide(), 1800);
-      }
-      try { fs.unlinkSync(audioPath); } catch (e) {}
-      return { success: true, actionHandled: true, action: actionResult.action };
+      return await finishAction(actionResult);
     }
 
     cleanText = audioEngine.applySnippets(cleanText);
@@ -672,7 +790,8 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer, meta = {}) => 
       rawText,
       cleanText,
       provider: store.config.sttProvider,
-      duration: historyDuration
+      duration: historyDuration,
+      mode: 'dictation'
     });
 
     if (hudWindow) {
@@ -690,5 +809,7 @@ ipcMain.handle('process-audio-buffer', async (event, arrayBuffer, meta = {}) => 
     console.error('❌ [PROCESS ERROR] Ses işleme hatası:', e);
     if (hudWindow) hudWindow.hide();
     return { success: false, error: e.message };
+  } finally {
+    isProcessingAudio = false;
   }
 });

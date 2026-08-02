@@ -167,24 +167,32 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
 
   const themes = [
     {
-      id: 'obsidian',
-      name: 'Dark Obsidian',
-      desc: 'Siyah & Indigo Işıltısı (Varsayılan)',
-      colors: ['#0b0f19', '#1e1f2a', '#6366f1']
+      id: 'day',
+      name: 'Day',
+      desc: 'Açık zemin + teal aksan (varsayılan)',
+      colors: ['#f4f4f5', '#ffffff', '#0d9488']
     },
     {
-      id: 'lavender',
-      name: 'Midnight Lavender',
-      desc: 'Color Hunt (#070F2B / #1B1A55 / #535C91 / #9290C3)',
-      colors: ['#070F2B', '#1B1A55', '#535C91', '#9290C3']
+      id: 'obsidian',
+      name: 'Obsidian',
+      desc: 'Zinc zemin + teal aksan',
+      colors: ['#09090b', '#111114', '#2dd4bf']
+    },
+    {
+      id: 'nord',
+      name: 'Nord',
+      desc: 'Cool gray + soft blue',
+      colors: ['#1a1d23', '#22262e', '#7dd3fc']
     }
   ];
+
+  const currentTheme = config.activeTheme === 'lavender' ? 'nord' : (config.activeTheme || 'day');
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-white mb-1">Genel Ayarlar</h2>
-        <p className="text-xs text-gray-400">Kısayol tuşları, tema seçimi, otomatik güncelleme ve ses tercihlerini yönetin.</p>
+        <h2 className="text-xl font-bold text-white mb-1">Sistem</h2>
+        <p className="text-xs text-gray-400">Kısayol, tema, güncelleme ve ses tercihleri.</p>
       </div>
 
       {/* Auto-Update Control Card */}
@@ -258,34 +266,32 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
         </div>
       </div>
 
-      {/* Theme Selection Card */}
-      <div className="glass-card p-5 space-y-4 border-indigo-500/30">
+      <div className="surface-panel p-5 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-purple-500/10 text-purple-400">
+          <div className="p-2.5 rounded-lg theme-accent-muted theme-accent-color">
             <Palette className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Uygulama Teması</h3>
-            <p className="text-xs text-gray-400">Görsel renk paletini tercihinize göre değiştirin.</p>
+            <h3 className="text-sm font-semibold text-white">Tema</h3>
+            <p className="text-xs text-gray-400">Renk paletini seç.</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
           {themes.map((t) => {
-            const isSelected = (config.activeTheme || 'obsidian') === t.id;
+            const isSelected = currentTheme === t.id;
             return (
               <div
                 key={t.id}
                 onClick={() => handleChange('activeTheme', t.id)}
-                className={`glass-card p-4 cursor-pointer relative transition-all ${
-                  isSelected
-                    ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/20'
-                    : 'hover:border-white/20'
+                className={`surface-panel p-4 cursor-pointer relative transition-colors ${
+                  isSelected ? 'theme-accent-muted' : 'hover:bg-white/5'
                 }`}
+                style={isSelected ? { borderColor: 'var(--accent-color)' } : undefined}
               >
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-bold text-white">{t.name}</h4>
-                  {isSelected && <Check className="w-4 h-4 text-indigo-400" />}
+                  {isSelected && <Check className="w-4 h-4 theme-accent-color" />}
                 </div>
                 <p className="text-[11px] text-gray-400 mb-3">{t.desc}</p>
                 
@@ -322,8 +328,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
               <>
                 <button
                   onClick={handleStartRecord}
-                  className="border border-white/10 hover:border-indigo-500/50 rounded-xl px-4 py-2 text-xs text-indigo-300 font-mono text-center font-bold min-w-[140px] transition-all cursor-pointer shadow-inner"
-                  style={{ backgroundColor: 'rgba(15, 23, 42, 0.9)' }}
+                  className="hotkey-chip border rounded-xl px-4 py-2 text-xs font-mono text-center font-bold min-w-[140px] transition-all cursor-pointer"
                   title="Yeni kısayol kaydetmek için tıklayın"
                 >
                   {formatDisplayHotkey(config.hotkey)}
@@ -337,8 +342,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
             ) : (
               <div className="flex items-center gap-2">
                 <div
-                  className="border border-indigo-500 rounded-xl px-4 py-2 text-xs text-white font-mono text-center font-bold animate-pulse min-w-[150px]"
-                  style={{ backgroundColor: 'rgba(99, 102, 241, 0.3)' }}
+                  className="hotkey-chip hotkey-chip-recording border rounded-xl px-4 py-2 text-xs font-mono text-center font-bold animate-pulse min-w-[150px]"
                 >
                   {recordedCombo || 'Tuşlara basın...'}
                 </div>
@@ -448,7 +452,7 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
             max="-30"
             value={config.silenceThresholdDb ?? -55}
             onChange={(e) => handleChange('silenceThresholdDb', parseInt(e.target.value, 10))}
-            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+            className="w-full h-2 range-slider rounded-lg appearance-none cursor-pointer"
           />
           <div className="flex justify-between text-[10px] text-gray-500">
             <span>Daha hassas (-70)</span>
@@ -459,17 +463,18 @@ export default function TabGeneral({ config, setConfig, saveConfig }) {
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-300">Minimum konuşma süresi</span>
-            <span className="text-indigo-300 font-mono">{Number(config.silenceMinDuration ?? 0.3).toFixed(1)} sn</span>
+            <span className="text-indigo-300 font-mono">{Number(config.silenceMinDuration ?? 0.45).toFixed(1)} sn</span>
           </div>
           <input
             type="range"
             min="0.1"
             max="1.5"
             step="0.1"
-            value={config.silenceMinDuration ?? 0.3}
+            value={config.silenceMinDuration ?? 0.45}
             onChange={(e) => handleChange('silenceMinDuration', parseFloat(e.target.value))}
-            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+            className="w-full h-2 range-slider rounded-lg appearance-none cursor-pointer"
           />
+          <p className="text-[10px] text-gray-500">Öneri: 0.4–0.5 sn — çok kısa gürültüde Whisper uydurmalarını azaltır.</p>
         </div>
       </div>
     </div>

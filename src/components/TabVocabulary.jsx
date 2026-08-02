@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Plus, Trash2, SpellCheck } from 'lucide-react';
 
-export default function TabVocabulary({ config, setConfig, saveConfig }) {
+export default function TabVocabulary({ config, setConfig, saveConfig, embedded = false }) {
   const [newWord, setNewWord] = useState('');
   const [newPhonetic, setNewPhonetic] = useState('');
 
@@ -26,10 +26,12 @@ export default function TabVocabulary({ config, setConfig, saveConfig }) {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
       <div>
-        <h2 className="text-xl font-bold text-white mb-1">Özel Kelime Sözlüğü (Custom Vocabulary)</h2>
-        <p className="text-xs text-gray-400">Yapay zekanın fonetik olarak yanlış anladığı veya özel marka/terim adlarını otomatik düzeltmek için eşleyin.</p>
+        <h2 className="text-xl font-bold text-white mb-1">Özel Sözlük</h2>
+        <p className="text-xs text-gray-400">Fonetik hataları ve özel terimleri düzelt.</p>
       </div>
+      )}
 
       {/* Add New Entry Form */}
       <div className="glass-card p-5 space-y-4">

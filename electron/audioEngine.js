@@ -109,7 +109,7 @@ class AudioEngine {
     try {
       const stats = fs.statSync(audioPath);
       const thresholdDb = Number(this.store.config.silenceThresholdDb ?? -55);
-      const minSpeechSec = Number(this.store.config.silenceMinDuration ?? 0.3);
+      const minSpeechSec = Number(this.store.config.silenceMinDuration ?? 0.45);
 
       console.log(
         `\n🔊 [AUDIO ANALYSIS] ${path.basename(audioPath)} | ${stats.size} bytes | eşik ${thresholdDb} dBFS | min konuşma ${minSpeechSec}s`
@@ -181,28 +181,28 @@ class AudioEngine {
     console.log(`🎙️  [STT ENGINE] Transkripsiyon sağlayıcısı başlatılıyor: '${provider.toUpperCase()}'`);
 
     if (provider === 'local_whisper') {
-      return await this.transcribeLocal(audioPath, config.localWhisperModel || 'base');
+      return await this.transcribeLocal(audioPath, config.localWhisperModel || 'small');
     }
     if (provider === 'groq') {
       if (!config.groqApiKey) {
         console.log(`⚠️  [GROQ WARNING] Groq API Key bulunamadı! Yerel Whisper (Offline) moduna otomatik geçiliyor...`);
-        return await this.transcribeLocal(audioPath, config.localWhisperModel || 'base');
+        return await this.transcribeLocal(audioPath, config.localWhisperModel || 'small');
       }
-      return await this.transcribeGroq(audioPath, config.groqApiKey);
+      return await this.transcribeGroq(audioPath, config.groqApiKey, config.sttModel);
     }
     if (provider === 'openai') {
       if (!config.openaiApiKey) {
         console.log(`⚠️  [OPENAI WARNING] OpenAI API Key bulunamadı! Yerel Whisper (Offline) moduna otomatik geçiliyor...`);
-        return await this.transcribeLocal(audioPath, config.localWhisperModel || 'base');
+        return await this.transcribeLocal(audioPath, config.localWhisperModel || 'small');
       }
       return await this.transcribeOpenAI(audioPath, config.openaiApiKey);
     }
     if (provider === 'openrouter') {
       // OpenRouter does not provide a dedicated Whisper STT endpoint in this app.
       console.log('⚠️  [STT WARNING] OpenRouter STT desteklenmiyor. Yerel Whisper kullanılıyor...');
-      return await this.transcribeLocal(audioPath, config.localWhisperModel || 'base');
+      return await this.transcribeLocal(audioPath, config.localWhisperModel || 'small');
     }
-    return await this.transcribeLocal(audioPath, config.localWhisperModel || 'base');
+    return await this.transcribeLocal(audioPath, config.localWhisperModel || 'small');
   }
 
   /**
@@ -256,10 +256,21 @@ class AudioEngine {
   }
 
   /**
-   * Bias local Whisper toward known voice-action phrases and vocabulary.
+   * Bias Whisper toward Turkish dictation + known voice-action phrases / vocabulary.
+   * Used by local faster-whisper and Groq/OpenAI prompt fields.
    */
   buildWhisperInitialPrompt() {
-    const parts = [];
+    const parts = [
+      'not defteri',
+      'hesap makinesi',
+      'ayarlar',
+      'dosya gezgini',
+      'görev yöneticisi',
+      'aç',
+      'kapat',
+      'VoiceScribe',
+      'dikte'
+    ];
     try {
       const windowsActions = require('./windowsActions');
       const hints = windowsActions.collectTriggerHints(this.store.config);
@@ -283,17 +294,19 @@ class AudioEngine {
       if (!key || seen.has(key)) continue;
       seen.add(key);
       unique.push(String(p).trim());
-      if (unique.length >= 30) break;
+      if (unique.length >= 40) break;
     }
 
-    if (unique.length === 0) return '';
-    return `Sesli komutlar ve özel kelimeler: ${unique.join(', ')}.`;
+    return (
+      'Bu bir Türkçe dikte kaydıdır. Kısa sesli komutlar ve özel kelimeler: ' +
+      `${unique.join(', ')}.`
+    );
   }
 
   /**
    * Local Whisper transcription via Python helper
    */
-  async transcribeLocal(audioPath, modelName = 'base') {
+  async transcribeLocal(audioPath, modelName = 'small') {
     const scriptPath = this.getWhisperScriptPath();
     if (!fs.existsSync(scriptPath)) {
       console.error(`❌ [LOCAL WHISPER ERROR] Script bulunamadı: ${scriptPath}`);
@@ -369,14 +382,19 @@ class AudioEngine {
   /**
    * Groq Cloud Whisper transcription
    */
-  async transcribeGroq(audioPath, apiKey) {
-    console.log(`☁️  [GROQ CLOUD] Groq LPU Whisper-Large-v3-Turbo API'sine istek gönderiliyor...`);
+  async transcribeGroq(audioPath, apiKey, modelName = 'whisper-large-v3') {
+    const model = String(modelName || 'whisper-large-v3').trim() || 'whisper-large-v3';
+    console.log(`☁️  [GROQ CLOUD] Groq ${model} API'sine istek gönderiliyor...`);
     const fileData = fs.readFileSync(audioPath);
     const boundary = '----WebKitFormBoundary' + Math.random().toString(16).substring(2);
+    const prompt = this.buildWhisperInitialPrompt();
 
     let body = [];
-    body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-large-v3-turbo\r\n`));
+    body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\n${model}\r\n`));
     body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\ntr\r\n`));
+    if (prompt) {
+      body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="prompt"\r\n\r\n${prompt}\r\n`));
+    }
     body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="recording.webm"\r\nContent-Type: audio/webm\r\n\r\n`));
     body.push(fileData);
     body.push(Buffer.from(`\r\n--${boundary}--\r\n`));
@@ -429,10 +447,14 @@ class AudioEngine {
     console.log(`☁️  [OPENAI CLOUD] OpenAI Whisper-1 API'sine istek gönderiliyor...`);
     const fileData = fs.readFileSync(audioPath);
     const boundary = '----WebKitFormBoundary' + Math.random().toString(16).substring(2);
+    const prompt = this.buildWhisperInitialPrompt();
 
     let body = [];
     body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n`));
     body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\ntr\r\n`));
+    if (prompt) {
+      body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="prompt"\r\n\r\n${prompt}\r\n`));
+    }
     body.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="recording.webm"\r\nContent-Type: audio/webm\r\n\r\n`));
     body.push(fileData);
     body.push(Buffer.from(`\r\n--${boundary}--\r\n`));
@@ -480,6 +502,68 @@ class AudioEngine {
 
   escapeRegExp(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * Whisper often invents YouTube/subtitle credit lines on short, quiet, or
+   * non-speech audio (training-data priors). Treat those as empty.
+   */
+  isWhisperHallucination(text) {
+    const normalized = String(text || '')
+      .toLocaleLowerCase('tr-TR')
+      .replace(/["""'']/g, '')
+      .replace(/[.,!?;:…]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!normalized) return false;
+
+    const exact = new Set([
+      'altyazı m k',
+      'altyazi m k',
+      'altyazı mk',
+      'altyazi mk',
+      'altyazı m.k',
+      'altyazi m.k',
+      'subtitles by amara org',
+      'subtitles by the amara org',
+      'subtitles by the amara.org community',
+      'thanks for watching',
+      'thank you for watching',
+      'thanks for watching please subscribe',
+      'abone olmayı unutmayın',
+      'izlediğiniz için teşekkürler'
+    ]);
+
+    if (exact.has(normalized)) return true;
+
+    const patterns = [
+      /^altyaz[ıi]\s*m\.?\s*k\.?$/i,
+      /^subtitl(e|es)\s+by\b/i,
+      /^thanks?\s+for\s+watching\b/i,
+      /^thank\s+you\s+for\s+watching\b/i,
+      /^amara\.?org\b/i,
+      /^translated\s+by\b/i,
+      /^caption(s|ed)?\s+by\b/i,
+      /^izlediğiniz\s+için\s+teşekkür/i
+    ];
+
+    return patterns.some((re) => re.test(normalized));
+  }
+
+  /**
+   * Drop known Whisper hallucination transcripts so they are not pasted.
+   * @returns {string} original text, or '' if hallucinated
+   */
+  sanitizeTranscript(text) {
+    if (!text || typeof text !== 'string') return '';
+    const trimmed = text.trim();
+    if (!trimmed) return '';
+    if (this.isWhisperHallucination(trimmed)) {
+      console.log(`🧹 [STT HALLUCINATION] Whisper uydurması yok sayıldı: "${trimmed}"`);
+      return '';
+    }
+    return trimmed;
   }
 
   /**

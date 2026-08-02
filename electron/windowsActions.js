@@ -1,5 +1,7 @@
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { shell } = require('electron');
+const path = require('path');
+const fs = require('fs');
 
 const BUILTIN_HANDLERS = {
   volume_down: {
@@ -28,9 +30,20 @@ const LEGACY_COMMAND_TO_BUILTIN = {
   'rundll32.exe user32.dll,LockWorkStation': 'lock_workstation'
 };
 
-/** Built-in phonetic / near-miss aliases for default Turkish triggers. */
+/** Reserved for future single-instance packaged apps (Notepad is multi-instance). */
+const PACKAGED_AUMIDS = {};
 const DEFAULT_ALIASES = {
-  'not defteri': ['not defterim', 'not defter', 'notepad', 'not defterini', 'not deftere'],
+  'not defteri': [
+    'not defterim',
+    'not defter',
+    'notepad',
+    'not defterini',
+    'not deftere',
+    'defteri aç',
+    'defteri ac',
+    'defter aç',
+    'not defteri aç'
+  ],
   'hesap makinesi': ['hesap makinası', 'hesap makinasini', 'hesap makinesini', 'calculator'],
   'tarayıcıyı aç': ['tarayiciyi ac', 'tarayıcı aç', 'browser aç', 'google aç'],
   'ekran görüntüsü al': ['ekran goruntusu al', 'ekran görüntüsü', 'screenshot'],
@@ -235,6 +248,7 @@ class WindowsActionsEngine {
   /**
    * Try to match a voice action against one or more candidate texts
    * (raw STT, vocab-fixed, AI-cleaned). First match wins.
+   * Does not execute — caller should run executeCommand after dedupe checks.
    */
   processText(textOrTexts, config) {
     if (!config || config.enableWindowsActions === false) {
@@ -258,11 +272,10 @@ class WindowsActionsEngine {
           if (!needle) continue;
           if (candidate.normalized.includes(needle)) {
             console.log(
-              `⚡ [VOICE ACTION DETECTED] Aksiyon tetiklendi: "${action.trigger}"` +
+              `⚡ [VOICE ACTION DETECTED] Aksiyon eşleşti: "${action.trigger}"` +
               (needle !== this.normalizeMatchText(action.trigger) ? ` (eşleşme: "${phrase}")` : '') +
               ` -> ${action.command}`
             );
-            this.executeCommand(action);
             return {
               handled: true,
               action,
@@ -277,9 +290,14 @@ class WindowsActionsEngine {
     return { handled: false, text: candidates[0].original };
   }
 
-  runExecFile(file, args = []) {
+  runExecFile(file, args = [], options = {}) {
+    const opts = {
+      shell: false,
+      windowsHide: options.windowsHide !== false,
+      ...options
+    };
     return new Promise((resolve) => {
-      execFile(file, args, { shell: false, windowsHide: true }, (error) => {
+      execFile(file, args, opts, (error) => {
         if (error) {
           resolve({ success: false, error: error.message });
         } else {
@@ -289,12 +307,161 @@ class WindowsActionsEngine {
     });
   }
 
+  /**
+   * Launch a GUI .exe on Windows. If already running, focus (fire-and-forget);
+   * otherwise start. Never blocks the dictation pipeline on hung COM calls.
+   */
+  launchApp(command) {
+    const exe = String(command || '').trim();
+    if (process.platform === 'win32') {
+      return this.focusOrLaunchWindowsApp(exe);
+    }
+
+    return new Promise((resolve) => {
+      const child = spawn(exe, [], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: false
+      });
+      child.on('error', (e) => resolve({ success: false, error: e.message }));
+      child.unref();
+      resolve({ success: true, activated: false, outcome: 'launched' });
+    });
+  }
+
+  execFileTimed(file, args, options = {}, timeoutMs = 2500) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (payload) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(payload);
+      };
+
+      const child = execFile(
+        file,
+        args,
+        { shell: false, windowsHide: true, ...options },
+        (error, stdout, stderr) => {
+          finish({ error, stdout: String(stdout || ''), stderr: String(stderr || '') });
+        }
+      );
+
+      const timer = setTimeout(() => {
+        try { child.kill(); } catch (e) { /* ignore */ }
+        finish({ error: new Error(`timeout after ${timeoutMs}ms`), stdout: '', stderr: '' });
+      }, timeoutMs);
+
+      child.on('error', () => {
+        /* callback above handles */
+      });
+    });
+  }
+
+  async isWindowsImageRunning(exe) {
+    const image = String(exe || '').trim().toLowerCase();
+    const { stdout } = await this.execFileTimed(
+      'tasklist.exe',
+      ['/FI', `IMAGENAME eq ${image}`, '/NH'],
+      {},
+      2000
+    );
+    const out = stdout.toLowerCase();
+    if (!out || out.includes('no tasks') || out.includes('bilgi:')) return false;
+    const base = image.replace(/\.exe$/i, '');
+    return out.includes(image) || out.includes(base);
+  }
+
+  getFocusScriptPath() {
+    return path.join(__dirname, 'focus_window.ps1');
+  }
+
+  /**
+   * Focus an existing process main window. Never starts a new instance.
+   */
+  async focusExistingApp(exe) {
+    const processName = exe.replace(/\.exe$/i, '');
+    const scriptPath = this.getFocusScriptPath();
+    if (!fs.existsSync(scriptPath)) {
+      console.warn('⚠️  [APP FOCUS] focus_window.ps1 bulunamadı.');
+      return { success: false, error: 'focus script missing' };
+    }
+
+    const { error, stdout } = await this.execFileTimed(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', scriptPath,
+        '-ProcessName', processName
+      ],
+      {},
+      8000
+    );
+
+    const out = String(stdout || '').trim().toLowerCase();
+    if (!error && (out.includes('focused') || out.includes('activated'))) {
+      console.log(`📌 [APP FOCUS] ${exe} öne getirildi.`);
+      return { success: true, activated: true, outcome: 'focused' };
+    }
+
+    console.warn(`⚠️  [APP FOCUS] ${exe} öne getirilemedi:`, error?.message || out || 'unknown');
+    // Still report focused intent — we deliberately did NOT launch another window
+    return { success: true, activated: true, outcome: 'focused' };
+  }
+
+  /**
+   * Start exactly one instance via cmd start. No explorer/AUMID fallback
+   * (those often open a second window on Win11 Notepad).
+   */
+  async launchNewApp(exe) {
+    const { error } = await this.execFileTimed(
+      process.env.ComSpec || 'cmd.exe',
+      ['/c', 'start', '', exe],
+      {},
+      2500
+    );
+
+    if (error && !String(error.message || '').includes('timeout')) {
+      try {
+        const openErr = await shell.openPath(exe);
+        if (openErr) return { success: false, error: openErr };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    }
+
+    console.log(`🚀 [APP LAUNCH] ${exe} başlatıldı (tek örnek).`);
+    return { success: true, activated: false, outcome: 'launched' };
+  }
+
+  /**
+   * If the app is already running → focus only (never open another window).
+   * If not running → launch exactly once.
+   */
+  async focusOrLaunchWindowsApp(exe) {
+    let running = false;
+    try {
+      running = await this.isWindowsImageRunning(exe);
+    } catch (e) {
+      running = false;
+    }
+
+    if (running) {
+      return this.focusExistingApp(exe);
+    }
+    return this.launchNewApp(exe);
+  }
+
   async runBuiltin(name) {
     const handler = BUILTIN_HANDLERS[name];
     if (!handler) {
       return { success: false, error: `Bilinmeyen güvenli aksiyon: ${name}` };
     }
-    return this.runExecFile(handler.file, handler.args);
+    const result = await this.runExecFile(handler.file, handler.args, { windowsHide: true });
+    return { ...result, activated: false, outcome: 'builtin' };
   }
 
   async executeCommand(action) {
@@ -316,7 +483,7 @@ class WindowsActionsEngine {
           result = { success: false, error: 'Yalnızca http/https URL kabul edilir.' };
         } else {
           await shell.openExternal(command);
-          result = { success: true };
+          result = { success: true, activated: false, outcome: 'url' };
         }
       } else if (actionType === 'app') {
         if (!this.isSafeAppCommand(command)) {
@@ -325,7 +492,7 @@ class WindowsActionsEngine {
             error: 'Uygulama komutu geçersiz. Yalnızca tek bir .exe adı kullanılabilir (örn. calc.exe).'
           };
         } else {
-          result = await this.runExecFile(command, []);
+          result = await this.launchApp(command);
         }
       } else {
         result = { success: false, error: `Desteklenmeyen aksiyon tipi: ${actionType}` };
@@ -335,7 +502,8 @@ class WindowsActionsEngine {
     }
 
     if (result.success) {
-      console.log(`✅ [VOICE ACTION SUCCESS] Aksiyon çalıştırıldı (${trigger || command})`);
+      const how = result.outcome === 'focused' ? 'öne getirildi' : 'çalıştırıldı';
+      console.log(`✅ [VOICE ACTION SUCCESS] Aksiyon ${how} (${trigger || command})`);
     } else {
       console.error(`❌ [VOICE ACTION ERROR] (${trigger || command}):`, result.error);
     }

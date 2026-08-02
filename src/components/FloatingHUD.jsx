@@ -14,6 +14,7 @@ export default function FloatingHUD() {
   const audioCtxRef = useRef(null);
   const stopBeepPlayedRef = useRef(false);
   const durationRef = useRef(0);
+  const recordingStartedAtRef = useRef(0);
 
   const getAudioCtx = async () => {
     if (!audioCtxRef.current) {
@@ -73,6 +74,7 @@ export default function FloatingHUD() {
       setDuration(0);
       stopBeepPlayedRef.current = false;
       durationRef.current = 0;
+      recordingStartedAtRef.current = Date.now();
       timer = setInterval(() => {
         setDuration(prev => {
           const next = prev + 1;
@@ -82,10 +84,24 @@ export default function FloatingHUD() {
       }, 1000);
 
       startAudioCapture();
-    } else {
-      clearInterval(timer);
     }
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      // StrictMode remount: recorder still active → discard that orphan session.
+      // Intentional stop calls stopAudioCapture() first (state → inactive), so we
+      // must not discard the real utterance when leaving 'recording'.
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        discardRecordingRef.current = true;
+        try { mediaRecorderRef.current.stop(); } catch (e) { /* ignore */ }
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      }
+    };
   }, [status]);
 
   useEffect(() => {
@@ -109,12 +125,25 @@ export default function FloatingHUD() {
 
   const startAudioCapture = async () => {
     try {
+      // Ensure any previous capture session is fully torn down first
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        discardRecordingRef.current = true;
+        try { mediaRecorderRef.current.stop(); } catch (e) { /* ignore */ }
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+      }
+
       discardRecordingRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
+      const captureGeneration = Symbol('capture');
+      mediaRecorderRef.current = { __generation: captureGeneration };
       
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorder.__generation = captureGeneration;
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -125,6 +154,10 @@ export default function FloatingHUD() {
 
       mediaRecorder.onstop = async () => {
         try {
+          // Ignore stale recorders from StrictMode / remount races
+          if (mediaRecorderRef.current && mediaRecorderRef.current.__generation !== captureGeneration) {
+            return;
+          }
           if (discardRecordingRef.current) {
             audioChunksRef.current = [];
             return;
@@ -134,8 +167,11 @@ export default function FloatingHUD() {
           const buffer = await audioBlob.arrayBuffer();
 
           if (window.api && buffer.byteLength > 0) {
+            const elapsedSec = recordingStartedAtRef.current
+              ? (Date.now() - recordingStartedAtRef.current) / 1000
+              : durationRef.current;
             window.api.sendAudioBuffer(buffer, {
-              durationSeconds: durationRef.current
+              durationSeconds: Math.max(0.1, elapsedSec)
             });
           }
         } finally {
@@ -205,7 +241,15 @@ export default function FloatingHUD() {
   };
 
   const handleCancel = () => {
-    // Reject any late buffer in main first, then discard locally.
+    const processing = ['transcribing', 'cleaning', 'processing', 'busy'].includes(status);
+    if (processing) {
+      // Hide only — main process keeps finishing STT/action
+      if (window.api) window.api.cancelRecording();
+      setStatus('idle');
+      setCleanText('');
+      return;
+    }
+
     discardRecordingRef.current = true;
     audioChunksRef.current = [];
     if (!stopBeepPlayedRef.current) {
@@ -228,23 +272,27 @@ export default function FloatingHUD() {
     return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const isProcessingUi = ['transcribing', 'cleaning', 'processing', 'busy'].includes(status);
+
   return (
     <div className="w-full h-full flex items-center justify-center p-2 select-none">
-      <div className={`glass-hud px-4 py-2.5 flex items-center gap-3 transition-all duration-300 ${status === 'recording' ? 'glass-hud-recording' : ''}`}>
+      <div className={`glass-hud px-3.5 py-2 flex items-center gap-2.5 transition-all duration-300 ${status === 'recording' ? 'glass-hud-recording' : ''}`}>
         
         {/* Status Indicator / Icon */}
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 relative">
+        <div className="flex items-center justify-center w-7 h-7 rounded-full bg-white/10 relative">
           {status === 'recording' && (
             <>
-              <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse-recording" />
-              <Mic className="w-4 h-4 text-red-400 absolute opacity-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse-recording" />
+              <Mic className="w-3.5 h-3.5 text-red-400 absolute opacity-0" />
             </>
           )}
-          {status === 'transcribing' && <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />}
-          {status === 'cleaning' && <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />}
-          {status === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 animate-bounce" />}
-          {status === 'error' && <AlertCircle className="w-4 h-4 text-red-400" />}
-          {status === 'idle' && <Mic className="w-4 h-4 text-indigo-400" />}
+          {(status === 'transcribing' || status === 'processing' || status === 'busy') && (
+            <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+          )}
+          {status === 'cleaning' && <Sparkles className="w-3.5 h-3.5 theme-accent-color animate-pulse" />}
+          {status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+          {status === 'error' && <AlertCircle className="w-3.5 h-3.5 text-red-400" />}
+          {status === 'idle' && <Mic className="w-3.5 h-3.5 theme-accent-color" />}
         </div>
 
         {/* Audio Waveform Canvas */}
@@ -255,24 +303,32 @@ export default function FloatingHUD() {
         {/* Status Text & Timer */}
         <div className="flex flex-col min-w-[120px]">
           <div className="text-xs font-semibold tracking-wide flex items-center gap-1.5">
-            {status === 'recording' && <span className="text-red-400">Dinleniyor...</span>}
-            {status === 'transcribing' && <span className="text-amber-300">Transkribe ediliyor...</span>}
-            {status === 'cleaning' && <span className="text-purple-300">Düzeltiliyor...</span>}
-            {status === 'success' && <span className="text-emerald-400">Yapıştırıldı! ✓</span>}
-            {status === 'error' && <span className="text-red-400">Hata Oluştu</span>}
+            {status === 'recording' && <span className="text-red-400">Dinleniyor</span>}
+            {status === 'transcribing' && <span className="text-amber-300">Transkripsiyon</span>}
+            {status === 'processing' && <span className="text-amber-300">İşleniyor</span>}
+            {status === 'busy' && <span className="text-amber-300">Meşgul</span>}
+            {status === 'cleaning' && <span className="theme-accent-color">Temizleniyor</span>}
+            {status === 'success' && (
+              <span className="text-emerald-400">
+                {cleanText && !cleanText.includes('Yapıştır') && (cleanText.includes('açıldı') || cleanText.includes('öne getir') || cleanText.includes('uygulandı') || cleanText.includes('Zaten'))
+                  ? 'Aksiyon'
+                  : 'Tamam'}
+              </span>
+            )}
+            {status === 'error' && <span className="text-red-400">Hata</span>}
             {status === 'idle' && <span className="text-gray-400">Hazır</span>}
           </div>
           
           <div className="text-[10px] text-gray-400 font-mono">
-            {status === 'recording' ? formatTime(duration) : (cleanText ? `"${cleanText.substring(0, 20)}..."` : 'Kısayol ile başlatın')}
+            {status === 'recording' ? formatTime(duration) : (cleanText ? `"${cleanText.substring(0, 28)}${cleanText.length > 28 ? '…' : ''}"` : 'Kısayol ile başlat')}
           </div>
         </div>
 
-        {/* Cancel Action Button */}
+        {/* Cancel / hide */}
         <button
           onClick={handleCancel}
           className="no-drag w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-          title="İptal (Esc)"
+          title={isProcessingUi ? 'Gizle' : 'İptal'}
         >
           <X className="w-3.5 h-3.5" />
         </button>

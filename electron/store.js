@@ -22,9 +22,9 @@ class Store {
       autoPaste: true,
       audioDevice: 'default',
       soundEffects: true,
-      activeTheme: 'obsidian',
+      activeTheme: 'day',
       silenceThresholdDb: -55,
-      silenceMinDuration: 0.3,
+      silenceMinDuration: 0.45,
 
       // Providers & Models
       sttProvider: 'local_whisper',
@@ -34,8 +34,8 @@ class Store {
       deepgramApiKey: '',
       geminiApiKey: '',
 
-      localWhisperModel: 'base',
-      sttModel: 'whisper-large-v3-turbo',
+      localWhisperModel: 'small',
+      sttModel: 'whisper-large-v3',
 
       // Cleanup settings
       enableCleanup: true,
@@ -50,7 +50,14 @@ class Store {
         { word: 'Dikte', phonetic: 'dikte' },
         { word: 'VS Code', phonetic: 'vesekod' },
         { word: 'React', phonetic: 'riyakt' },
-        { word: 'TypeScript', phonetic: 'taypskript' }
+        { word: 'TypeScript', phonetic: 'taypskript' },
+        { word: 'JavaScript', phonetic: 'cavaskript' },
+        { word: 'GitHub', phonetic: 'gitap' },
+        { word: 'OpenAI', phonetic: 'open ey ay' },
+        { word: 'Whisper', phonetic: 'vispır' },
+        { word: 'not defteri', phonetic: 'not defter' },
+        { word: 'hesap makinesi', phonetic: 'hesap makinası' },
+        { word: 'görev yöneticisi', phonetic: 'gorev yoneticisi' }
       ],
 
       // Text snippets — clearly fake placeholders only (no realistic PII)
@@ -77,6 +84,45 @@ class Store {
     if (this.migrateLegacyFakeSnippets()) {
       this._pendingSnippetMigration = true;
     }
+    if (this.migrateSilenceAndVocabulary()) {
+      this._pendingSnippetMigration = true;
+    }
+  }
+
+  /**
+   * Soft-upgrade overly sensitive silence floor and merge new default vocabulary
+   * entries the user does not already have.
+   */
+  migrateSilenceAndVocabulary() {
+    let changed = false;
+
+    const minSpeech = Number(this.config.silenceMinDuration);
+    if (Number.isFinite(minSpeech) && minSpeech > 0 && minSpeech <= 0.15) {
+      this.config.silenceMinDuration = 0.45;
+      console.log('🧹 [STORE] Min konuşma süresi 0.45 sn olarak güncellendi (çok düşük eski değer).');
+      changed = true;
+    }
+
+    const defaults = this.defaultConfig.customVocabulary || [];
+    const current = Array.isArray(this.config.customVocabulary)
+      ? [...this.config.customVocabulary]
+      : [];
+    const seen = new Set(
+      current.map((item) => String(item?.word || '').trim().toLocaleLowerCase('tr-TR')).filter(Boolean)
+    );
+    for (const item of defaults) {
+      const key = String(item?.word || '').trim().toLocaleLowerCase('tr-TR');
+      if (!key || seen.has(key)) continue;
+      current.push({ ...item });
+      seen.add(key);
+      changed = true;
+    }
+    if (changed) {
+      this.config.customVocabulary = current;
+      console.log(`🧹 [STORE] Kelime dağarcığı varsayılanlarla birleştirildi (${current.length} madde).`);
+    }
+
+    return changed;
   }
 
   /**
@@ -180,7 +226,7 @@ class Store {
 
     this.secretsUnlocked = true;
 
-    let shouldPersist = this._pendingSnippetMigration;
+    let shouldPersist = this._pendingSnippetMigration || this._themeMigrated;
     if (hadPlaintext && this.canEncrypt()) {
       console.log('🔐 [STORE] Migrating plaintext API keys to OS-encrypted storage...');
       shouldPersist = true;
@@ -191,6 +237,7 @@ class Store {
     if (shouldPersist) {
       this.persistConfig();
       this._pendingSnippetMigration = false;
+      this._themeMigrated = false;
     }
   }
 
@@ -198,7 +245,13 @@ class Store {
     try {
       if (fs.existsSync(this.configPath)) {
         const data = fs.readFileSync(this.configPath, 'utf8');
-        return { ...this.defaultConfig, ...JSON.parse(data) };
+        const config = { ...this.defaultConfig, ...JSON.parse(data) };
+        // lavender theme renamed to nord
+        if (config.activeTheme === 'lavender') {
+          config.activeTheme = 'nord';
+          this._themeMigrated = true;
+        }
+        return config;
       }
     } catch (e) {
       console.error('Config load error:', e);

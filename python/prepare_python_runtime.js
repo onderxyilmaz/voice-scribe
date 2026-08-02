@@ -17,7 +17,7 @@ const PYTHON_VERSION = '3.11.9';
 const EMBED_ZIP = `python-${PYTHON_VERSION}-embed-amd64.zip`;
 const EMBED_URL = `https://www.python.org/ftp/python/${PYTHON_VERSION}/${EMBED_ZIP}`;
 const GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';
-const DEFAULT_MODEL = process.env.VOICESCRIBE_BUNDLE_MODEL || 'base';
+const DEFAULT_MODEL = process.env.VOICESCRIBE_BUNDLE_MODEL || 'small';
 
 function log(msg) {
   console.log(msg);

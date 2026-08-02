@@ -1,6 +1,6 @@
 {
   "name": "voicescribe",
-  "version": "1.0.11",
+  "version": "1.1.0",
   "description": "VoiceScribe — Windows 11 için Akıllı ve Fluent Tasarımlı Sesli Dikte (Voice-to-Text) Uygulaması",
   "main": "electron/main.js",
   "scripts": {
@@ -93,6 +93,7 @@
   "author": "Önder Yılmaz",
   "license": "MIT",
   "dependencies": {
+    "@floating-ui/react": "^0.27.20",
     "electron-updater": "^6.3.9",
     "lucide-react": "^0.474.0",
     "react": "^19.0.0",

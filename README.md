@@ -1,59 +1,82 @@
-# VoiceScribe — Windows 11 Akıllı Sesli Dikte (Voice-to-Text)
+# VoiceScribe
 
-[![Windows App](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?logo=windows&style=for-the-badge)](https://github.com/onderxyilmaz/voice-scribe/releases/latest)
-[![Kurulum Setup](https://img.shields.io/badge/%C4%B0ndir-Setup%20(NSIS)-10B981?style=for-the-badge&logo=windows)](https://github.com/onderxyilmaz/voice-scribe/releases/latest)
-[![Portable](https://img.shields.io/badge/%C4%B0ndir-Portable-6366F1?style=for-the-badge&logo=windows)](https://github.com/onderxyilmaz/voice-scribe/releases/latest)
+Windows 10 / 11 için **sesli dikte** masaüstü uygulaması. Global kısayolla konuşursunuz; metin aktif imleç konumuna yapıştırılır. Yerel Whisper veya bulut STT, AI metin temizleme, sesli Windows aksiyonları ve toplantı özeti tek arayüzde.
 
-![VoiceScribe Splash](electron/splash.png)
+[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?logo=windows&style=for-the-badge)](https://github.com/onderxyilmaz/voice-scribe/releases/latest)
+[![İndir Setup](https://img.shields.io/badge/%C4%B0ndir-Setup%20(NSIS)-10B981?style=for-the-badge&logo=windows)](https://github.com/onderxyilmaz/voice-scribe/releases/latest)
+[![İndir Portable](https://img.shields.io/badge/%C4%B0ndir-Portable-0D9488?style=for-the-badge&logo=windows)](https://github.com/onderxyilmaz/voice-scribe/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+
+![VoiceScribe](electron/splash.png)
 
 ---
 
 ## Hemen indirin
 
-Kod derlemeden kullanmak için [GitHub Releases](https://github.com/onderxyilmaz/voice-scribe/releases/latest) sayfasındaki son sürümü indirin.
+Derleme bilmeden kullanmak için [GitHub Releases](https://github.com/onderxyilmaz/voice-scribe/releases/latest) üzerinden son sürümü indirin.
 
-| Sürüm türü | Açıklama | Not |
+| Tür | Dosya örneği | Not |
 | :--- | :--- | :--- |
-| **Windows Kurulum (Setup / NSIS)** | Masaüstü ve Başlat menüsü kısayolu oluşturur. | **Önerilen.** Uygulama içi otomatik güncelleme destekler. |
-| **Taşınabilir (Portable)** | Kurulum olmadan çalışır. | Otomatik güncelleme **desteklenmez**. |
+| **Setup (NSIS)** — önerilen | `VoiceScribe-Setup-<sürüm>.exe` | Masaüstü / Başlat kısayolu. **Uygulama içi otomatik güncelleme** destekler. |
+| **Portable** | `VoiceScribe-<sürüm>.exe` | Kurulumsuz çalışır. Otomatik güncelleme **yok**. |
 
-Güncel dosya adları genelde şöyledir:
+> İlk açılışta Windows SmartScreen “bilinmeyen yayıncı” uyarısı gösterebilir (imzasız dağıtım). *Ek bilgi → Yine de çalıştır* ile devam edilebilir. Kod imzalama ayrı bir bölümdedir.
 
-- `VoiceScribe-Setup-<sürüm>.exe`
-- `VoiceScribe-<sürüm>.exe` (portable)
+---
+
+## Ne yapar?
+
+1. Global kısayola basın (varsayılan: **Ctrl+Space**, ayarlanabilir).
+2. Konuşun; bırakınca transkripsiyon başlar.
+3. Kısa komutlar (**“not defteri aç”** vb.) Windows aksiyonu çalıştırır.
+4. Uzun dikte metni AI ile temizlenir (isteğe bağlı) ve imlece yapıştırılır.
 
 ---
 
 ## Öne çıkan özellikler
 
-- **Yerel / çevrimdışı dikte:** Setup ile gelen gömülü Python + `faster-whisper` motoru (internet gerekmez).
-- **Bulut STT:** Groq (`whisper-large-v3-turbo`) ve OpenAI Whisper API.
-- **AI metin temizleme:** OpenRouter / Groq / OpenAI üzerinden duraksama ve imla düzeltme (API anahtarı gerekir).
-- **Toplantı & AI:** Mikrofonla toplantı kaydı → STT transkript + AI özet; yazılı komutla asistan (yanıt panoya kopyalanır).
-- **Global kısayol:** Varsayılan `Ctrl+Shift+Space` (ayarlanabilir). Metni aktif imleç konumuna yapıştırır.
-- **Temalar:** Dark Obsidian ve Midnight Lavender.
-- **HUD kapsülü:** Kayıt sırasında ses dalgası görselleştirici.
-- **Özel sözlük & metin kısayolları:** Fonetik düzeltme ve sesli şablon genişletme.
-- **Windows aksiyonları:** Güvenli allowlist ile uygulama açma, URL ve sistem (ses/kilit) aksiyonları.
-- **Otomatik güncelleme:** Yalnızca NSIS kurulumunda (GitHub Releases).
+### Ses → metin
+- **Yerel Whisper** (`faster-whisper`, varsayılan model **small**): çevrimdışı, gömülü Python runtime ile Setup’ta gelir.
+- **Groq** (`whisper-large-v3` / Turbo) ve **OpenAI Whisper-1**.
+- Türkçe bias prompt, VAD / decode ayarları, bilinen Whisper uydurmalarının (`Altyazı M.K.` vb.) filtrelenmesi.
+- Özel **sözlük** (fonetik → kelime) ve **metin kısayolları** (snippet).
 
-### Bilerek kapsam dışı / henüz yok
+### Kısa komut modu & Windows aksiyonları
+- ~2.5 sn altı kayıtlarda aksiyon öncelikli; eşleşmezse rastgele metin yapıştırılmaz.
+- Güvenli allowlist: uygulama (`.exe`), http(s) URL, ses / kilit gibi sistem aksiyonları.
+- Açık uygulama varsa **yeni pencere açmadan öne getirme** (Win11 Notepad dahil).
 
-- OpenRouter veya Deepgram üzerinden **ses→metin (STT)** yok (OpenRouter yalnızca metin / AI sohbet için kullanılır).
-- Toplantı kaydı şu an **tek mikrofon** kaydıdır; sistem sesi / hoparlör yakalama ve canlı altyazı yoktur.
+### AI & toplantı
+- Metin temizleme: OpenRouter / Groq / OpenAI (API anahtarı gerekir).
+- Toplantı: mikrofon kaydı → STT → AI özet.
+- “AI’ya sor”: yanıt panoya kopyalanır.
+
+### Arayüz
+- Temalar: **Day** (varsayılan yeni kurulum), **Obsidian**, **Nord**.
+- Gruplu kenar çubuğu (Dikte / Ayarlar), HUD kayıt kapsülü, Floating UI tooltip’ler.
+- API anahtarları OS `safeStorage` ile saklanır.
+
+### Güncelleme
+- Yalnızca **NSIS Setup** kurulumunda GitHub Releases üzerinden otomatik kontrol / indirme.
+
+### Bilerek yok / sınırlı
+- OpenRouter veya Deepgram ile **STT yok** (OpenRouter metin / AI için).
+- Toplantı kaydı **tek mikrofon**; sistem sesi / hoparlör yakalama ve canlı altyazı yok.
 
 ---
 
 ## Teknolojiler
 
-- **Frontend:** React 19, Vite, Glassmorphism CSS
-- **Masaüstü:** Electron 34, panoya yazma / Ctrl+V enjeksiyonu
-- **Yerel STT:** Python `faster-whisper` (kurulumla paketlenmiş runtime)
-- **Paketleme:** `electron-builder` (NSIS + portable)
+| Katman | Stack |
+| :--- | :--- |
+| UI | React 19, Vite, tema token’lı CSS, Floating UI |
+| Masaüstü | Electron 34, global kısayol, tray, metin enjeksiyonu |
+| Yerel STT | Python `faster-whisper` (paketlenmiş runtime) |
+| Dağıtım | `electron-builder` (NSIS + portable) |
 
 ---
 
-## Geliştirici modu
+## Geliştirici kurulumu
 
 ```bash
 git clone https://github.com/onderxyilmaz/voice-scribe.git
@@ -62,34 +85,40 @@ npm install
 npm run electron:dev
 ```
 
-`electron:dev` Vite hazır olana kadar bekler, sonra Electron’u açar.
+`electron:dev` Vite’ın ayağa kalkmasını bekler, ardından Electron’u açar.
 
-### Windows kurulum dosyası üretme
+### Windows paketleme
 
 ```bash
 npm run dist:win
 ```
 
-İlk derlemede gömülü Python runtime indirilir/kurulur (`python-runtime/`, git’e eklenmez). Çıktılar `release/` klasörüne yazılır.
+İlk derlemede gömülü Python runtime hazırlanır (`python-runtime/`, git’e eklenmez). Çıktılar `release/` altındadır.
 
-Sertifika yokken build **imzasız** kalır (`SmartScreen` uyarısı normaldir). İmza için aşağıdaki bölüme bakın.
+İmzasız zorlamak için:
+
+```powershell
+npm run dist:win:unsigned
+```
+
+---
+
+## Kullanım ipuçları
+
+- **Kısa sesli komut** için net söyleyin ve kaydı kısa tutun (komut modu).
+- **Uzun dikte** için birkaç saniye konuşun; cleanup açıksa metin düzeltilir.
+- Yerel kalite için Motor’da model **Small** (veya Medium); Groq’da **Large-v3** önerilir.
+- Genel → Sessizlik: min konuşma süresi ~**0.45 sn** kısa gürültü / Whisper uydurmalarını azaltır.
+- Notepad zaten açıksa tekrar “not defteri aç” yeni pencere açmaz; mevcut pencereyi öne getirmeyi dener.
 
 ---
 
 ## Windows kod imzalama (SmartScreen)
 
-SmartScreen, “Windows PC'nizi korudu” uyarısını **bilinmeyen yayıncı / imzasız veya itibarsız** dosyalarda gösterir. Bu uyarıyı kod yazarak kaldıramazsınız; **kod imzalama sertifikası** + zamanla oluşan indirme itibarı gerekir.
+SmartScreen uyarısı imzasız veya itibarsız yayıncıda normaldir; kodla kaldırılamaz. **Kod imzalama sertifikası** + indirme itibarı gerekir.
 
-### Önemli gerçekler (2024+)
-
-- **EV sertifika artık anında SmartScreen geçişi vermiyor.** OV ile aynı şekilde itibar birikir.
-- Türkiye'de bireysel geliştirici için genelde pratik yol: bir CA’dan **OV Code Signing** sertifikası (DigiCert, Sectigo, GlobalSign vb.). Anahtar artık USB token / HSM’de tutulur.
-- Azure Trusted Signing bazı bölgelerle sınırlı; Türkiye için uygun olmayabilir — satın almadan önce [Microsoft dokümantasyonunu](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options) kontrol edin.
-
-### Bu projede imzalı build
-
-1. Sertifikayı (genelde `.pfx` veya token + export) hazırlayın.
-2. Build öncesi ortam değişkenlerini ayarlayın:
+- EV artık anında itibar vermez; OV ile benzer şekilde birikir.
+- Build öncesi örnek:
 
 ```powershell
 $env:CSC_LINK = "C:\path\to\voicescribe-codesign.pfx"
@@ -97,18 +126,21 @@ $env:CSC_KEY_PASSWORD = "sertifika-sifresi"
 npm run dist:win
 ```
 
-3. Sertifika olmadan / bilinçli imzasız:
+Ayrıntılar için [Microsoft kod imzalama seçenekleri](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options).
 
-```powershell
-npm run dist:win:unsigned
-```
+---
 
-`publisherName` sertifikadaki Common Name ile uyumlu olmalıdır; imza etkinleştirildiğinde `package.json` → `build.win` altına eklenebilir.
+## Sürümleme
 
-İmzalı Setup’ı indirme sayısı arttıkça SmartScreen uyarısı zamanla azalır; yeni sürüm hash’lerinde uyarı yeniden görülebilir.
+SemVer kullanılır (`MAJOR.MINOR.PATCH`).
+
+- **MINOR:** yeni özellik / belirgin UX (ör. `1.1.0`)
+- **PATCH:** hata düzeltmesi / küçük iyileştirme (ör. `1.0.11`)
 
 ---
 
 ## Lisans
 
-MIT — Geliştirici: **Önder Yılmaz**.
+MIT — **Önder Yılmaz**.
+
+Sorun ve istekler: [GitHub Issues](https://github.com/onderxyilmaz/voice-scribe/issues) · İndirme: [Releases](https://github.com/onderxyilmaz/voice-scribe/releases/latest)

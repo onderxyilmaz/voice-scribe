@@ -1,5 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { History, Search, Copy, Check, Trash2, Calendar, Clock, AlertTriangle } from 'lucide-react';
+import { History, Search, Copy, Check, Trash2, Calendar, Clock, AlertTriangle, Zap, Mic2, HelpCircle } from 'lucide-react';
+
+function resolveHistoryMode(item) {
+  if (item?.mode === 'action' || item?.mode === 'command_miss' || item?.mode === 'dictation') {
+    return item.mode;
+  }
+  const clean = String(item?.cleanText || '');
+  if (clean.startsWith('⚡')) return 'action';
+  if (clean.startsWith('🎯')) return 'command_miss';
+  return 'dictation';
+}
+
+function ModeBadge({ mode }) {
+  if (mode === 'action') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-semibold">
+        <Zap className="w-3 h-3" /> Aksiyon
+      </span>
+    );
+  }
+  if (mode === 'command_miss') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 text-[10px] font-semibold">
+        <HelpCircle className="w-3 h-3" /> Komut kaçtı
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-300 text-[10px] font-semibold">
+      <Mic2 className="w-3 h-3" /> Dikte
+    </span>
+  );
+}
 
 export default function TabHistory() {
   const [history, setHistory] = useState([]);
@@ -71,8 +103,8 @@ export default function TabHistory() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white mb-1">Geçmiş Vault (Transcription History)</h2>
-          <p className="text-xs text-gray-400">Tüm sesli dikteleriniz ve AI tarafından temizlenmiş metinler burada saklanır.</p>
+          <h2 className="text-xl font-bold text-white mb-1">Geçmiş</h2>
+          <p className="text-xs text-gray-400">Dikte metinleri ve sesli aksiyonlar.</p>
         </div>
 
         {history.length > 0 && (
@@ -108,6 +140,7 @@ export default function TabHistory() {
             <div key={item.id} className="glass-card p-4 space-y-2 relative group hover:border-indigo-500/40">
               <div className="flex items-center justify-between text-[11px] text-gray-400 border-b border-white/5 pb-2">
                 <div className="flex items-center gap-3">
+                  <ModeBadge mode={resolveHistoryMode(item)} />
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-indigo-400" />
                     {new Date(item.timestamp).toLocaleDateString('tr-TR')}
@@ -122,13 +155,15 @@ export default function TabHistory() {
                   <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 font-mono text-[10px]">
                     {item.provider}
                   </span>
-                  <button
-                    onClick={() => handleCopy(item.cleanText || item.rawText, item.id)}
-                    className="p-1.5 rounded-lg bg-white/5 hover:bg-indigo-600 text-gray-300 hover:text-white transition-colors"
-                    title="Kopyala"
-                  >
-                    {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                  {resolveHistoryMode(item) === 'dictation' && (
+                    <button
+                      onClick={() => handleCopy(item.cleanText || item.rawText, item.id)}
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-indigo-600 text-gray-300 hover:text-white transition-colors"
+                      title="Kopyala"
+                    >
+                      {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleOpenDeleteModal('single', item.id)}
                     className="p-1.5 rounded-lg bg-white/5 hover:bg-red-600/80 text-red-400 hover:text-white transition-colors"
@@ -145,7 +180,7 @@ export default function TabHistory() {
               </div>
 
               {/* Raw Text comparison if modified */}
-              {item.rawText && item.cleanText && item.rawText !== item.cleanText && (
+              {item.rawText && item.cleanText && item.rawText !== item.cleanText && resolveHistoryMode(item) === 'dictation' && (
                 <div className="text-[11px] text-gray-500 italic bg-white/5 p-2 rounded-lg">
                   Ham: "{item.rawText}"
                 </div>

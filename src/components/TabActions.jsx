@@ -52,7 +52,7 @@ function aliasesToInput(aliases) {
   return String(aliases);
 }
 
-export default function TabActions({ config, setConfig, saveConfig }) {
+export default function TabActions({ config, setConfig, saveConfig, embedded = false }) {
   const [trigger, setTrigger] = useState('');
   const [aliases, setAliases] = useState('');
   const [command, setCommand] = useState('');
@@ -404,10 +404,12 @@ export default function TabActions({ config, setConfig, saveConfig }) {
 
   return (
     <div className="space-y-6">
+      {!embedded && (
       <div>
-        <h2 className="text-xl font-bold text-white mb-1">Sesli Windows Aksiyonları (Voice Windows Actions)</h2>
-        <p className="text-xs text-gray-400">Sesli komutlarla Windows uygulamalarını çalıştırın, ses seviyesini değiştirin veya sistem aksiyonlarını tetikleyin.</p>
+        <h2 className="text-xl font-bold text-white mb-1">Windows Aksiyonları</h2>
+        <p className="text-xs text-gray-400">Sesli komutla uygulama aç, URL aç veya sistem aksiyonu çalıştır.</p>
       </div>
+      )}
 
       {/* Enable Toggle Card with Custom Checkbox Standard */}
       <div className="glass-card p-5 space-y-3">
